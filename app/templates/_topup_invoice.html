@@ -1,0 +1,13 @@
+<div class="invoice-card"
+     hx-get="/topup/{{ user.id }}/check/{{ payment_hash }}"
+     hx-trigger="every 2s"
+     hx-target="#invoice"
+     hx-swap="innerHTML">
+    <h3>${{ "%.2f"|format(amount_usd) }} ({{ amount_sats }} sats)</h3>
+    <img src="{{ qr }}" alt="Lightning invoice QR" class="qr">
+    <details>
+        <summary>Or copy invoice text</summary>
+        <textarea readonly>{{ bolt11 }}</textarea>
+    </details>
+    <div id="status">waiting for payment…</div>
+</div>

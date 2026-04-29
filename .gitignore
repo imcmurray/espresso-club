@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.local
+*.secret
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local data
+*.sqlite3
+*.sqlite3-journal
+data/
+
+# Build outputs
+dist/
+build/
+*.egg
+
+# Generated signs (regenerate from script)
+signs/*.png
+signs/*.pdf
+
+# Editor
+.vscode/
+.idea/
+*.swp
+.DS_Store

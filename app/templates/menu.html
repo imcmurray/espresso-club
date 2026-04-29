@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Tap to start · Espresso Club{% endblock %}
+{% block content %}
+<div id="screen"
+     hx-get="/menu/state"
+     hx-trigger="every 1s"
+     hx-swap="innerHTML">
+    {% include "_menu_state.html" %}
+</div>
+{% endblock %}

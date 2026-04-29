@@ -1,0 +1,160 @@
+# Espresso Club — Lightning stack + app
+#
+# Default profile (no --profile flag): LNbits w/ FakeWallet + the espresso app.
+# Adds Phoenixd when run with --profile phoenixd for real Lightning.
+#
+# Usage:
+#   docker compose up -d                          # dev: FakeWallet
+#   docker compose --profile phoenixd up -d        # prod: Phoenixd (mainnet)
+#
+# All containers use apparmor=unconfined per LXC requirements (see /project/CLAUDE.md).
+
+name: espresso-club
+
+services:
+  # -----------------------------------------------------------------------------
+  # LNbits — multi-user Lightning wallet system. Each staff member gets a
+  # sub-wallet with its own balance. Talks to a "funding source" beneath it
+  # (FakeWallet for dev, Phoenixd for real LN).
+  # -----------------------------------------------------------------------------
+  lnbits:
+    image: lnbitsdocker/lnbits:latest
+    container_name: espresso-lnbits
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "5000:5000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5000
+      LNBITS_DATA_FOLDER: /data
+      LNBITS_DATABASE_URL: sqlite:////data/database.sqlite3
+      LNBITS_ADMIN_UI: "true"
+      LNBITS_SITE_TITLE: "Espresso Club"
+      LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
+      # Default to FakeWallet — switch to PhoenixdWallet via .env when going live.
+      LNBITS_BACKEND_WALLET_CLASS: ${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}
+      # Phoenixd config (only used when LNBITS_BACKEND_WALLET_CLASS=PhoenixdWallet)
+      PHOENIXD_API_ENDPOINT: ${PHOENIXD_API_ENDPOINT:-http://phoenixd:9740/}
+      PHOENIXD_API_PASSWORD: ${PHOENIXD_API_PASSWORD:-}
+    volumes:
+      - lnbits-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000/api/v1/health').read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # -----------------------------------------------------------------------------
+  # Phoenixd — headless ACINQ Lightning daemon. Auto-managed channels via
+  # ACINQ's LSP, no Bitcoin Core required. Real keys, real Lightning.
+  # Only started when --profile phoenixd is passed.
+  # -----------------------------------------------------------------------------
+  phoenixd:
+    image: acinq/phoenixd:0.5.1
+    container_name: espresso-phoenixd
+    restart: unless-stopped
+    profiles: ["phoenixd"]
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "127.0.0.1:9740:9740"   # REST API — bind to localhost only
+    environment:
+      PHOENIX_SEED: ${PHOENIX_SEED:-}
+    volumes:
+      - phoenixd-data:/phoenix/.phoenix
+    command:
+      - --http-bind-ip=0.0.0.0
+      - --http-bind-port=9740
+      - --agree-to-terms-of-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9740/getinfo --header=\"Authorization: Basic $(echo -n :$$PHOENIX_PASSWORD | base64)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # -----------------------------------------------------------------------------
+  # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API for the NFC
+  # daemon and Slack bot to call into.
+  # -----------------------------------------------------------------------------
+  espresso-app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: espresso-app
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      lnbits:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      LNBITS_URL: http://lnbits:5000
+      LNBITS_ADMIN_KEY: ${LNBITS_ADMIN_KEY:-}
+      RELAY_DRIVER: ${RELAY_DRIVER:-simulator}
+      SHELLY_HOST: ${SHELLY_HOST:-}
+      GRINDER_PULSE_SECONDS: ${GRINDER_PULSE_SECONDS:-30}
+      DRINKS_CONFIG: /app/drinks.yaml
+      DATABASE_PATH: /data/espresso.sqlite3
+    volumes:
+      - espresso-data:/data
+      - ./app/drinks.yaml:/app/drinks.yaml:ro
+    # healthcheck declared in the Dockerfile
+
+  # -----------------------------------------------------------------------------
+  # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.
+  # Default mode = simulator: exposes :9999/tap so curl can fake a tap.
+  # -----------------------------------------------------------------------------
+  nfc-daemon:
+    build:
+      context: .
+      dockerfile: nfc_daemon/Dockerfile
+    container_name: espresso-nfc
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      espresso-app:
+        condition: service_healthy
+    ports:
+      - "9999:9999"   # simulator only — harmless to expose
+    environment:
+      ESPRESSO_APP_URL: http://espresso-app:8080
+      TAP_SIMULATOR: ${TAP_SIMULATOR:-true}
+      NFC_DEVICE: ${NFC_DEVICE:-usb}
+    devices:
+      # Pass the USB device through when running on real hardware.
+      # Comment out if you don't have a PN532 plugged in.
+      []
+
+  # -----------------------------------------------------------------------------
+  # Slack bot — onboarding + low-balance DMs + leaderboard. Only starts if
+  # SLACK_BOT_TOKEN is provided.
+  # -----------------------------------------------------------------------------
+  slack-bot:
+    build:
+      context: .
+      dockerfile: slack_bot/Dockerfile
+    container_name: espresso-slack-bot
+    restart: unless-stopped
+    profiles: ["slack"]
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      espresso-app:
+        condition: service_healthy
+    environment:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      ESPRESSO_APP_URL: http://espresso-app:8080
+      LOW_BALANCE_THRESHOLD_USD: "2.00"
+
+volumes:
+  lnbits-data:
+  phoenixd-data:
+  espresso-data:

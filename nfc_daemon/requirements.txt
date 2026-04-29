@@ -1,0 +1,5 @@
+httpx==0.27.2
+aiohttp==3.10.5
+# nfcpy is the standard CPython library for PN53x readers (USB or I2C/SPI on Pi).
+# Optional install — only required when TAP_SIMULATOR is false.
+nfcpy==1.0.4

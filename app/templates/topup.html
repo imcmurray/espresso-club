@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Top up · {{ user.name }}{% endblock %}
+{% block content %}
+<section class="topup">
+    <h2>Top up · {{ user.name }}</h2>
+    <p>Current balance: <strong>${{ "%.2f"|format(balance_usd) }}</strong></p>
+    <p>Choose an amount, then scan the QR with any Lightning wallet.</p>
+    <div class="topup-buttons">
+        {% for amt in amounts %}
+        <button hx-post="/topup/{{ user.id }}/{{ amt }}"
+                hx-target="#invoice"
+                hx-swap="innerHTML">
+            ${{ "%.0f"|format(amt) }}
+        </button>
+        {% endfor %}
+    </div>
+    <div id="invoice"></div>
+    <p><a href="/menu">← back to menu</a></p>
+</section>
+{% endblock %}

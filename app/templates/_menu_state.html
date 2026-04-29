@@ -1,0 +1,28 @@
+{% if session %}
+    <div class="session-card">
+        <div class="hello">Hi {{ session.user_name }}</div>
+        <div class="balance">Balance: ${{ "%.2f"|format(balance_usd) }}</div>
+        <div class="drinks-grid">
+            {% for d in drinks %}
+            <button class="drink"
+                    hx-post="/api/buy/{{ d.id }}"
+                    hx-target="#screen"
+                    hx-swap="none">
+                <div class="emoji">{{ d.emoji }}</div>
+                <div class="name">{{ d.name }}</div>
+                <div class="price">${{ "%.2f"|format(d.price_usd) }}</div>
+            </button>
+            {% endfor %}
+        </div>
+        <div class="hint">Session ends in 30 seconds — pick a drink or step away.</div>
+    </div>
+{% else %}
+    <div class="idle">
+        <div class="big-emoji">☕</div>
+        <div class="prompt">Tap your card to begin</div>
+        {% if message %}
+        <div class="message">{{ message }}</div>
+        {% endif %}
+        <div class="hint">First time? <a href="/onboard">Join the club</a></div>
+    </div>
+{% endif %}

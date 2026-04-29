@@ -1,0 +1,42 @@
+# Drink menu — edit prices to match your actual cost-per-drink.
+# Prices in USD; converted to sats at runtime using the current LNbits rate.
+#
+# Cost driver hints (per drink):
+#   espresso single:  ~7g beans
+#   double / americano: ~14g beans
+#   cappuccino / cortado: ~14g beans + ~120ml milk
+#   latte: ~14g beans + ~240ml milk
+#   milk only / hot water: creamer or distilled water
+#
+# Rule of thumb: actual ingredient cost + ~30% buffer for descaler, machine wear,
+# filters, and the occasional bag of beans you forgot to expense.
+
+drinks:
+  - id: espresso
+    name: Espresso
+    emoji: ☕
+    price_usd: 0.40
+    description: Single shot
+  - id: double
+    name: Double / Americano
+    emoji: ☕☕
+    price_usd: 0.60
+    description: Double shot or Americano
+  - id: cappuccino
+    name: Cappuccino
+    emoji: 🥛
+    price_usd: 0.90
+    description: Espresso + steamed milk + foam
+  - id: latte
+    name: Latte
+    emoji: 🥛🥛
+    price_usd: 1.10
+    description: Espresso + lots of steamed milk
+  - id: milk_only
+    name: Steamed milk / hot water
+    emoji: 💧
+    price_usd: 0.30
+    description: No espresso — for chai, tea, etc.
+
+topup_amounts_usd: [5, 10, 20, 50]
+low_balance_threshold_usd: 2.00

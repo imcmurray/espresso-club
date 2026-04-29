@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Join the Espresso Club{% endblock %}
+{% block content %}
+<section class="onboard">
+    <h2>Join the Espresso Club</h2>
+    <p>Enter your name. After submitting, tap your NFC card on the reader within 30 seconds to link it.</p>
+    <form method="post" action="/onboard">
+        <label>
+            Your name
+            <input type="text" name="name" required autofocus
+                   placeholder="Sarah Connor">
+        </label>
+        <button type="submit">Create my account →</button>
+    </form>
+    <div class="fine-print">
+        <p>This creates a Lightning sub-wallet for you on our LNbits instance. Your balance lives there. Top up with any Lightning wallet (Wallet of Satoshi, Phoenix, Strike, etc.).</p>
+    </div>
+</section>
+{% endblock %}

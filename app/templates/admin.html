@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Admin · Espresso Club{% endblock %}
+{% block content %}
+<section class="admin">
+    <h2>Members</h2>
+    <table>
+        <thead>
+            <tr><th>#</th><th>Name</th><th>NFC</th><th>Balance</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td>{{ u.id }}</td>
+                <td>{{ u.name }}</td>
+                <td>{{ u.nfc_uid or "(unregistered)" }}</td>
+                <td>{% if u.balance_usd is not none %}${{ "%.2f"|format(u.balance_usd) }}{% else %}?{% endif %}</td>
+                <td><a href="/topup/{{ u.id }}">Top up</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Leaderboard (last 30 days)</h2>
+    <ol class="leaderboard">
+        {% for name, drinks, sats in leaderboard %}
+        <li>{{ name }} — {{ drinks }} drinks, ${{ "%.2f"|format(sats_to_usd(sats)) }}</li>
+        {% else %}
+        <li class="empty">No drinks logged yet.</li>
+        {% endfor %}
+    </ol>
+
+    <h2>Recent activity</h2>
+    <table>
+        <thead>
+            <tr><th>When</th><th>User</th><th>What</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+            {% for entry, name in recent %}
+            <tr>
+                <td>{{ entry.timestamp }}</td>
+                <td>{{ name }}</td>
+                <td>{{ entry.kind }}{% if entry.drink_id %} · {{ entry.drink_id }}{% endif %}</td>
+                <td>${{ "%.2f"|format(entry.amount_usd) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
