@@ -67,13 +67,35 @@ docker compose up -d --build
 ```
 http://localhost:8080/menu    — touchscreen UI
 http://localhost:8080/admin   — operator dashboard
-http://localhost:5000         — LNbits admin
+http://localhost:5000         — LNbits (you usually don't need to log in here)
 
 # Simulate an NFC tap (no hardware needed)
 curl -X POST http://localhost:9999/tap \
      -H 'Content-Type: application/json' \
      -d '{"uid":"DEMO-SARAH"}'
 ```
+
+### Do I need to log into LNbits?
+
+For day-to-day operation: **no**. The espresso app talks to LNbits over its
+API. Onboarding, top-ups, drink purchases, balances — none of these require
+you to touch LNbits' UI.
+
+You'd only log in if you want to:
+- Inspect wallet balances directly
+- Sweep the operator wallet to your personal Lightning wallet
+- Install another LNbits extension
+- Change LNbits site settings
+
+LNbits doesn't have username/password login — it uses URL-as-credential. The
+admin (super-user) URL is auto-generated on first boot. To find it:
+
+```bash
+./scripts/lnbits-admin-url.sh
+# → prints http://localhost:5000/wallet?usr=<super-user-id>
+```
+
+Bookmark the URL it prints. That's your admin "login."
 
 ## Switching to real Lightning (Phoenixd)
 
