@@ -105,6 +105,7 @@ visibility to public for each of the three images so anyone can `docker pull`:
 
 ## Documentation
 
+- [`docs/release-pipeline.md`](./docs/release-pipeline.md) — push → GHA → GHCR → LXC pull-and-run loop, plus the monthly LNbits-unpin routine. **Start here if you're returning to the project after a break.**
 - [`docs/phoenixd.md`](./docs/phoenixd.md) — switching from FakeWallet to real Lightning
 - [`docs/hardware.md`](./docs/hardware.md) — Pi assembly, wiring, kiosk setup
 - [`docs/operations.md`](./docs/operations.md) — onboarding, topping up, refilling, auditing
