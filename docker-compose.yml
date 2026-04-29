@@ -13,32 +13,6 @@ name: espresso-club
 
 services:
   # -----------------------------------------------------------------------------
-  # One-shot init: pre-writes /data/.super_user with a freshly generated UUID
-  # on first boot. LNbits 0.10.x picks up this file on startup and creates
-  # that user as the super-admin. The espresso-app's auto-bootstrap then
-  # discovers the wallet adminkey from the SQLite DB without any manual paste.
-  # Idempotent: if /data/.super_user already exists, no-ops.
-  # -----------------------------------------------------------------------------
-  lnbits-init:
-    image: alpine:3.20
-    container_name: espresso-lnbits-init
-    restart: "no"
-    volumes:
-      - lnbits-data:/data
-    command:
-      - sh
-      - -c
-      - |
-        set -eu
-        if [ ! -f /data/.super_user ]; then
-          uuid="$$(cat /proc/sys/kernel/random/uuid | tr -d -)"
-          printf '%s' "$$uuid" > /data/.super_user
-          echo "[lnbits-init] wrote /data/.super_user: $$uuid"
-        else
-          echo "[lnbits-init] /data/.super_user already exists; skipping"
-        fi
-
-  # -----------------------------------------------------------------------------
   # LNbits — multi-user Lightning wallet system. Each staff member gets a
   # sub-wallet with its own balance. Talks to a "funding source" beneath it
   # (FakeWallet for dev, Phoenixd for real LN).
@@ -47,9 +21,21 @@ services:
     image: lnbitsdocker/lnbits-legend:0.10.10
     container_name: espresso-lnbits
     restart: unless-stopped
-    depends_on:
-      lnbits-init:
-        condition: service_completed_successfully
+    # Generate a stable SUPER_USER UUID on first boot, persist in
+    # /data/.super_user, and export as env on every start. LNbits 0.10.10
+    # reads SUPER_USER (not the file) to know which user has full admin
+    # rights. We write the file too because the espresso-app's
+    # auto-bootstrap reads /lnbits-data/.super_user to find the same value.
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -f /data/.super_user ]; then
+          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
+          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
+        fi
+        export SUPER_USER="$$(cat /data/.super_user)"
+        exec poetry run lnbits --port "$${PORT:-5000}" --host "$${HOST:-0.0.0.0}"
     security_opt:
       - apparmor=unconfined
     ports:

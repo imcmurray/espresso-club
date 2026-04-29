@@ -20,47 +20,32 @@
 
 services:
   # -------------------------------------------------------------------------
-  # One-shot init: pre-writes /data/.super_user with a freshly generated UUID
-  # on the very first boot. LNbits 0.10.x picks up this file on startup and
-  # creates that user as the super-admin (with auto-generated wallet +
-  # adminkey). The espresso-app's auto-bootstrap then discovers everything
-  # without any manual env-var paste.
-  #
-  # Idempotent: if /data/.super_user already exists, the init no-ops.
-  # -------------------------------------------------------------------------
-  lnbits-init:
-    image: alpine:3.20
-    container_name: espresso-lnbits-init
-    restart: "no"
-    volumes:
-      - lnbits-data:/data
-    command:
-      - sh
-      - -c
-      - |
-        set -eu
-        if [ ! -f /data/.super_user ]; then
-          uuid="$$(cat /proc/sys/kernel/random/uuid | tr -d -)"
-          printf '%s' "$$uuid" > /data/.super_user
-          echo "[lnbits-init] wrote /data/.super_user: $$uuid"
-        else
-          echo "[lnbits-init] /data/.super_user already exists; skipping"
-        fi
-
-  # -------------------------------------------------------------------------
   # LNbits — multi-user Lightning wallet system. Each staff member gets a
   # sub-wallet. Pinned to 0.10.10 because newer images have a SQLite migration
   # bug. See README.md "Pinned dependencies & known upstream quirks".
   # The LNBITS_DATABASE_URL is intentionally NOT set — leaving it unset lets
   # LNbits derive the SQLite path from LNBITS_DATA_FOLDER and avoids the bug.
+  #
+  # The command override generates a stable SUPER_USER UUID on first boot
+  # and exports it as env. LNbits 0.10.10 reads SUPER_USER (not the
+  # .super_user file) to know which user has full admin rights. We persist
+  # the UUID in /data/.super_user so it survives container restarts and so
+  # the espresso-app's auto-bootstrap can read it.
   # -------------------------------------------------------------------------
   lnbits:
     image: lnbitsdocker/lnbits-legend:0.10.10
     container_name: espresso-lnbits
     restart: unless-stopped
-    depends_on:
-      lnbits-init:
-        condition: service_completed_successfully
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -f /data/.super_user ]; then
+          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
+          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
+        fi
+        export SUPER_USER="$$(cat /data/.super_user)"
+        exec poetry run lnbits --port "$${PORT:-5000}" --host "$${HOST:-0.0.0.0}"
     security_opt:
       - apparmor=unconfined
     ports:
@@ -80,6 +65,12 @@ services:
       LNBITS_EXTENSIONS_DEFAULT_INSTALL: "usermanager"
     volumes:
       - lnbits-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health').read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   # -------------------------------------------------------------------------
   # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API.
@@ -91,7 +82,8 @@ services:
     security_opt:
       - apparmor=unconfined
     depends_on:
-      - lnbits
+      lnbits:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
