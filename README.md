@@ -88,14 +88,24 @@ You'd only log in if you want to:
 - Change LNbits site settings
 
 LNbits doesn't have username/password login — it uses URL-as-credential. The
-admin (super-user) URL is auto-generated on first boot. To find it:
+admin (super-user) URL is auto-generated on first boot. To find it (and the
+matching admin API key, useful if the espresso-app's auto-bootstrap fails):
 
 ```bash
+# From the docker host, with the repo checked out:
 ./scripts/lnbits-admin-url.sh
-# → prints http://localhost:5000/wallet?usr=<super-user-id>
+
+# Or from inside the lnbits container (no host access required):
+docker exec -i espresso-lnbits python3 < scripts/get-lnbits-admin-key.py
+
+# Or piped straight from GitHub (no local checkout):
+curl -fsSL https://raw.githubusercontent.com/imcmurray/espresso-club/main/scripts/get-lnbits-admin-key.py \
+  | docker exec -i espresso-lnbits python3
 ```
 
-Bookmark the URL it prints. That's your admin "login."
+Bookmark the URL it prints. That's your admin "login." The API key it prints
+is what you'd paste as `LNBITS_ADMIN_KEY` env on the espresso-app service if
+the auto-bootstrap can't read the lnbits-data volume.
 
 ## Switching to real Lightning (Phoenixd)
 
