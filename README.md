@@ -31,24 +31,48 @@ bitcoin-idea/
 └── docker-compose.yml       # LNbits + Phoenixd + app stack
 ```
 
-## Quick start (development)
+## Quick start
+
+### Use prebuilt images (recommended — and the only path on environments where local builds fail, like AppArmor-restricted LXCs)
+
+Multi-arch images for `amd64` and `arm64` are published to GHCR by the
+`build-and-push` workflow on every push to `main`. The Pi deployment
+(`docs/hardware.md`) targets arm64; LXCs and dev laptops target amd64.
 
 ```bash
-# 1. Bring up the Lightning + app stack (FakeWallet, no real LN traffic)
-cd /docker/espresso-club
+git clone https://github.com/imcmurray/espresso-club.git
+cd espresso-club
+cp .env.example .env
+
+# Pull first, then run. The pull step is explicit so we never silently fall
+# back to a local build (which is the failure mode on AppArmor-restricted LXCs).
+docker compose pull
 docker compose up -d
 
-# 2. Seed a few demo users
-python3 /project/bitcoin-idea/scripts/seed_demo_users.py
+# Seed demo users (optional)
+python3 scripts/seed_demo_users.py
+```
 
-# 3. Visit:
-#   http://localhost:8080/menu        — touchscreen UI
-#   http://localhost:8080/admin       — operator dashboard
-#   http://localhost:5000             — LNbits admin
+Pin a specific build for production by setting `ESPRESSO_TAG=<git-sha>` in
+`.env` instead of the default `latest`.
 
-# 4. Simulate an NFC tap (no hardware needed):
-curl -X POST http://localhost:8080/api/nfc/tap -d '{"uid":"DEMO-SARAH"}' \
-     -H 'Content-Type: application/json'
+### Build locally (dev environments where AppArmor doesn't get in the way)
+
+```bash
+docker compose up -d --build
+```
+
+### Verify the stack
+
+```
+http://localhost:8080/menu    — touchscreen UI
+http://localhost:8080/admin   — operator dashboard
+http://localhost:5000         — LNbits admin
+
+# Simulate an NFC tap (no hardware needed)
+curl -X POST http://localhost:9999/tap \
+     -H 'Content-Type: application/json' \
+     -d '{"uid":"DEMO-SARAH"}'
 ```
 
 ## Switching to real Lightning (Phoenixd)
@@ -67,6 +91,17 @@ See [`docs/hardware.md`](./docs/hardware.md).
 - **Phase 2** — Real PN532 + Shelly relay on a Pi. Flip `TAP_SIMULATOR=false` and `RELAY_DRIVER=shelly`.
 - **Phase 3–4** — Soft launch with coworkers, then office-wide. Operational, not code.
 - **Phase 5** — Slack bot, leaderboard, e-ink display niceties. Most are already in here.
+
+## First-time setup after enabling the workflow
+
+GHCR creates each new package as **private** by default, even when the source
+repo is public. After the first successful run of `build-and-push`, flip
+visibility to public for each of the three images so anyone can `docker pull`:
+
+1. Visit https://github.com/imcmurray?tab=packages
+2. For each of `espresso-club/app`, `espresso-club/nfc`, `espresso-club/slack`:
+   - Click the package → **Package settings** → **Change visibility** → **Public**
+3. (Once per package, lifetime of the project.)
 
 ## Documentation
 

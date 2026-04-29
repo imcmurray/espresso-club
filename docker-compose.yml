@@ -81,6 +81,7 @@ services:
   # daemon and Slack bot to call into.
   # -----------------------------------------------------------------------------
   espresso-app:
+    image: ghcr.io/imcmurray/espresso-club/app:${ESPRESSO_TAG:-latest}
     build:
       context: .
       dockerfile: app/Dockerfile
@@ -111,6 +112,7 @@ services:
   # Default mode = simulator: exposes :9999/tap so curl can fake a tap.
   # -----------------------------------------------------------------------------
   nfc-daemon:
+    image: ghcr.io/imcmurray/espresso-club/nfc:${ESPRESSO_TAG:-latest}
     build:
       context: .
       dockerfile: nfc_daemon/Dockerfile
@@ -137,6 +139,7 @@ services:
   # SLACK_BOT_TOKEN is provided.
   # -----------------------------------------------------------------------------
   slack-bot:
+    image: ghcr.io/imcmurray/espresso-club/slack:${ESPRESSO_TAG:-latest}
     build:
       context: .
       dockerfile: slack_bot/Dockerfile
