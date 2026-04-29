@@ -117,6 +117,16 @@ python3 -m pytest tests/    # unit tests (fast, hermetic)
 ./scripts/smoke_test.sh     # end-to-end against running stack
 ```
 
+## Pinned dependencies & known upstream quirks
+
+- **LNbits**: pinned to `lnbits-legend:0.10.10`. Newer images (`lnbits:latest`,
+  `lnbits-legend:0.11.x`) have a migration bug where the startup code runs
+  `SELECT * FROM information_schema.tables` (PostgreSQL syntax) regardless of
+  the actual database backend, so SQLite deployments crash on first boot.
+  0.10.10 works as long as `LNBITS_DATABASE_URL` is left unset and LNbits
+  picks the default SQLite path under `LNBITS_DATA_FOLDER`. Setting an
+  explicit `sqlite://` URL re-triggers the bug.
+
 ## Known issues
 
 ### Building Docker images inside an LXC with broken AppArmor

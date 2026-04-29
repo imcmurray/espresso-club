@@ -18,7 +18,7 @@ services:
   # (FakeWallet for dev, Phoenixd for real LN).
   # -----------------------------------------------------------------------------
   lnbits:
-    image: lnbitsdocker/lnbits:latest
+    image: lnbitsdocker/lnbits-legend:0.10.10
     container_name: espresso-lnbits
     restart: unless-stopped
     security_opt:
@@ -29,7 +29,10 @@ services:
       HOST: 0.0.0.0
       PORT: 5000
       LNBITS_DATA_FOLDER: /data
-      LNBITS_DATABASE_URL: sqlite:////data/database.sqlite3
+      # Note: LNBITS_DATABASE_URL is intentionally not set. When unset, LNbits
+      # uses its built-in SQLite path under LNBITS_DATA_FOLDER. Setting an
+      # explicit sqlite:// URL triggers a PostgreSQL-only migration query
+      # that fails on SQLite (LNbits issue across recent versions).
       LNBITS_ADMIN_UI: "true"
       LNBITS_SITE_TITLE: "Espresso Club"
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
