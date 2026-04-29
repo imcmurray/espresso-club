@@ -9,11 +9,12 @@ import qrcode
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pathlib import Path
 
 from config import sats_to_usd, usd_to_sats
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
 def _qr_data_url(payload: str) -> str:
@@ -32,9 +33,9 @@ async def topup_page(request: Request, user_id: int):
 
     balance_sats = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
     return templates.TemplateResponse(
+        request,
         "topup.html",
         {
-            "request": request,
             "user": user,
             "balance_usd": sats_to_usd(balance_sats),
             "amounts": state.drinks.topup_amounts_usd,
@@ -57,9 +58,9 @@ async def topup_invoice(request: Request, user_id: int, amount_usd: float):
     )
 
     return templates.TemplateResponse(
+        request,
         "_topup_invoice.html",
         {
-            "request": request,
             "user": user,
             "amount_usd": amount_usd,
             "amount_sats": sats,
@@ -99,7 +100,7 @@ async def topup_check(request: Request, user_id: int, payment_hash: str):
         meta={"payment_hash": payment_hash},
     )
     return templates.TemplateResponse(
+        request,
         "_topup_paid.html",
-        {"request": request, "user": user,
-         "balance_usd": sats_to_usd(balance_sats)},
+        {"user": user, "balance_usd": sats_to_usd(balance_sats)},
     )

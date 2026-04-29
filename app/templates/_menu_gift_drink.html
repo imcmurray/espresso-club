@@ -1,0 +1,24 @@
+<div class="session-card gift-flow">
+    <div class="hello">🎁 Gifting <strong>{{ session.gift_recipient_name }}</strong></div>
+    <div class="balance">Your balance: ${{ "%.2f"|format(balance_usd) }}</div>
+
+    <div class="drinks-grid">
+        {% for d in drinks %}
+        <button class="drink"
+                hx-post="/api/gift/{{ session.gift_recipient_id }}/{{ d.id }}"
+                hx-target="#screen"
+                hx-swap="none">
+            <div class="emoji">{{ d.emoji }}</div>
+            <div class="name">{{ d.name }}</div>
+            <div class="price">${{ "%.2f"|format(d.price_usd) }}</div>
+        </button>
+        {% endfor %}
+    </div>
+
+    <button class="cancel-btn"
+            hx-post="/menu/gift/cancel"
+            hx-target="#screen"
+            hx-swap="morph:innerHTML">
+        ← Back
+    </button>
+</div>

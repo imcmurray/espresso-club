@@ -1,21 +1,48 @@
 {% if session %}
-    <div class="session-card">
-        <div class="hello">Hi {{ session.user_name }}</div>
-        <div class="balance">Balance: ${{ "%.2f"|format(balance_usd) }}</div>
-        <div class="drinks-grid">
-            {% for d in drinks %}
-            <button class="drink"
-                    hx-post="/api/buy/{{ d.id }}"
+    {% if session.mode == "gift_pick_recipient" %}
+        {% include "_menu_gift_recipient.html" %}
+    {% elif session.mode == "gift_pick_drink" %}
+        {% include "_menu_gift_drink.html" %}
+    {% else %}
+        <div class="session-card">
+            <div class="hello">Hi {{ session.user_name }}</div>
+            <div class="balance">Balance: ${{ "%.2f"|format(balance_usd) }}</div>
+
+            {% if session.gift_banner %}
+            <div class="gift-banner">
+                {% for g in session.gift_banner %}
+                <div class="gift-banner-line">
+                    🎁 <strong>{{ g.sender_name }}</strong> gifted you
+                    {% if g.drink_name %}a <em>{{ g.drink_name }}</em>{% endif %}
+                    (${{ "%.2f"|format(g.amount_usd) }}) — already in your balance.
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="drinks-grid">
+                {% for d in drinks %}
+                <button class="drink"
+                        hx-post="/api/buy/{{ d.id }}"
+                        hx-target="#screen"
+                        hx-swap="none">
+                    <div class="emoji">{{ d.emoji }}</div>
+                    <div class="name">{{ d.name }}</div>
+                    <div class="price">${{ "%.2f"|format(d.price_usd) }}</div>
+                </button>
+                {% endfor %}
+            </div>
+
+            <button class="gift-btn"
+                    hx-post="/menu/gift/start"
                     hx-target="#screen"
-                    hx-swap="none">
-                <div class="emoji">{{ d.emoji }}</div>
-                <div class="name">{{ d.name }}</div>
-                <div class="price">${{ "%.2f"|format(d.price_usd) }}</div>
+                    hx-swap="morph:innerHTML">
+                🎁 Gift a drink to a teammate
             </button>
-            {% endfor %}
+
+            <div class="hint">Session ends in 30 seconds — pick a drink or step away.</div>
         </div>
-        <div class="hint">Session ends in 30 seconds — pick a drink or step away.</div>
-    </div>
+    {% endif %}
 {% else %}
     <div class="idle">
         <div class="big-emoji">☕</div>

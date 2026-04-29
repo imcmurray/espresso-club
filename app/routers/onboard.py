@@ -11,14 +11,15 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pathlib import Path
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
 @router.get("/onboard", response_class=HTMLResponse)
 async def onboard_form(request: Request):
-    return templates.TemplateResponse("onboard.html", {"request": request})
+    return templates.TemplateResponse(request, "onboard.html")
 
 
 @router.post("/onboard")

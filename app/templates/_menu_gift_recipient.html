@@ -1,0 +1,27 @@
+<div class="session-card gift-flow">
+    <div class="hello">🎁 Pick someone, {{ session.user_name }}</div>
+    <div class="balance">Your balance: ${{ "%.2f"|format(balance_usd) }}</div>
+
+    {% if other_users %}
+    <div class="recipients-grid">
+        {% for u in other_users %}
+        <button class="recipient"
+                hx-post="/menu/gift/recipient/{{ u.id }}"
+                hx-target="#screen"
+                hx-swap="morph:innerHTML">
+            <div class="recipient-emoji">👤</div>
+            <div class="recipient-name">{{ u.name }}</div>
+        </button>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="hint">No one else is registered yet — the espresso club is just you.</div>
+    {% endif %}
+
+    <button class="cancel-btn"
+            hx-post="/menu/gift/cancel"
+            hx-target="#screen"
+            hx-swap="morph:innerHTML">
+        ← Back
+    </button>
+</div>

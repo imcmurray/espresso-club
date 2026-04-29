@@ -8,12 +8,13 @@ import time
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from pathlib import Path
 
 from config import sats_to_usd
 from db import Drink
 
 router = APIRouter()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 
 _SLUG_RE = re.compile(r"[^a-z0-9_]+")
@@ -30,8 +31,7 @@ async def drinks_list(request: Request):
     state = request.app.state.app_state
     drinks = state.db.list_drinks(active_only=False)
     return templates.TemplateResponse(
-        "admin_drinks.html",
-        {"request": request, "drinks": drinks},
+        request, "admin_drinks.html", {"drinks": drinks},
     )
 
 
@@ -55,8 +55,8 @@ async def drinks_create(
         sort_order=int(sort_order), active=True,
     ))
     return templates.TemplateResponse(
-        "_drink_row.html",
-        {"request": request, "d": drink, "swap_oob": "afterbegin:#drinks-tbody"},
+        request, "_drink_row.html",
+        {"d": drink, "swap_oob": "afterbegin:#drinks-tbody"},
     )
 
 
@@ -67,7 +67,7 @@ async def drinks_edit_form(request: Request, drink_id: str):
     if not d:
         raise HTTPException(404, "no such drink")
     return templates.TemplateResponse(
-        "_drink_edit_row.html", {"request": request, "d": d},
+        request, "_drink_edit_row.html", {"d": d},
     )
 
 
@@ -78,7 +78,7 @@ async def drinks_row(request: Request, drink_id: str):
     if not d:
         raise HTTPException(404, "no such drink")
     return templates.TemplateResponse(
-        "_drink_row.html", {"request": request, "d": d, "swap_oob": None},
+        request, "_drink_row.html", {"d": d, "swap_oob": None},
     )
 
 
@@ -104,7 +104,7 @@ async def drinks_update(
         active=(active.lower() in ("on", "true", "1", "yes")),
     )
     return templates.TemplateResponse(
-        "_drink_row.html", {"request": request, "d": d, "swap_oob": None},
+        request, "_drink_row.html", {"d": d, "swap_oob": None},
     )
 
 
@@ -117,7 +117,7 @@ async def drinks_delete(request: Request, drink_id: str):
     # Return the row in its now-inactive form so HTMX can replace inline.
     d = state.db.get_drink(drink_id)
     return templates.TemplateResponse(
-        "_drink_row.html", {"request": request, "d": d, "swap_oob": None},
+        request, "_drink_row.html", {"d": d, "swap_oob": None},
     )
 
 
@@ -146,9 +146,9 @@ async def admin_dashboard(request: Request):
     leaderboard = state.db.leaderboard(since_ts=month_ago)
 
     return templates.TemplateResponse(
+        request,
         "admin.html",
         {
-            "request": request,
             "users": user_rows,
             "recent": recent,
             "leaderboard": leaderboard,

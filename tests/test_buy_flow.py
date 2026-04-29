@@ -40,6 +40,12 @@ def app(monkeypatch, tmp_path, fake_ln):
     import lnbits_client
     monkeypatch.setattr(lnbits_client, "LNbitsClient", lambda *a, **kw: fake_ln)
 
+    # Clear cached settings/drinks so this test's env (DATABASE_PATH etc.)
+    # actually gets read instead of leaking from a prior test.
+    import config
+    config.get_settings.cache_clear()
+    config.get_drinks.cache_clear()
+
     # Re-import main fresh so the lifespan re-runs with our patches.
     if "main" in sys.modules:
         del sys.modules["main"]

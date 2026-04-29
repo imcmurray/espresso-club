@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from config import sats_to_usd, usd_to_sats
+from state import GiftBannerEntry
 
 log = logging.getLogger("espresso.api")
 router = APIRouter(prefix="/api")
@@ -49,10 +50,25 @@ async def nfc_tap(event: TapEvent, request: Request):
         return {"status": "unknown", "uid": event.uid}
 
     balance = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
-    await state.set_session(user.id, user.name, balance)
-    log.info("tap: %s (balance %d sats / $%.2f)",
-             user.name, balance, sats_to_usd(balance))
-    return {"status": "ok", "user": user.name, "balance_sats": balance}
+
+    # Pull any unread gifts and build a banner. Acknowledge them in the same
+    # tap so they don't re-appear; the banner is held for the session
+    # lifetime, then disappears with the session.
+    banner: list[GiftBannerEntry] = []
+    for gift, sender_name in state.db.unacknowledged_gifts_for(user.id):
+        banner.append(GiftBannerEntry(
+            sender_name=sender_name,
+            drink_name=gift.drink_name,
+            amount_usd=gift.amount_usd,
+        ))
+    if banner:
+        state.db.acknowledge_gifts_for(user.id)
+
+    await state.set_session(user.id, user.name, balance, gift_banner=banner)
+    log.info("tap: %s (balance %d sats / $%.2f) — %d unread gift(s)",
+             user.name, balance, sats_to_usd(balance), len(banner))
+    return {"status": "ok", "user": user.name, "balance_sats": balance,
+            "unread_gifts": len(banner)}
 
 
 @router.post("/buy/{drink_id}")
@@ -109,6 +125,93 @@ async def buy_drink(drink_id: str, request: Request):
         "charged_usd": drink.price_usd,
         "charged_sats": cost_sats,
         "new_balance_sats": new_balance,
+    }
+
+
+# ---- gift flow ------------------------------------------------------------
+
+@router.post("/gift/{recipient_user_id}/{drink_id}")
+async def send_gift(recipient_user_id: int, drink_id: str, request: Request):
+    """Sender (current session) gifts a specific drink to recipient.
+
+    Funds flow sender_wallet → recipient_wallet via the same internal
+    transfer used for normal purchases. A gift row is recorded so the
+    recipient sees a banner the next time they tap.
+    """
+    state = request.app.state.app_state
+    session = state.session_or_none()
+    if not session:
+        raise HTTPException(409, "no active session — tap your card first")
+
+    sender = state.db.get_user(session.user_id)
+    if not sender:
+        raise HTTPException(500, "session user vanished")
+
+    if recipient_user_id == sender.id:
+        raise HTTPException(400, "you can't gift yourself")
+
+    recipient = state.db.get_user(recipient_user_id)
+    if not recipient:
+        raise HTTPException(404, "recipient not found")
+
+    drink = state.get_drink(drink_id)
+    if not drink:
+        raise HTTPException(404, "unknown drink")
+
+    cost_sats = usd_to_sats(drink.price_usd)
+    if session.balance_sats < cost_sats:
+        await state.clear_session(
+            message=f"{sender.name}: not enough to gift {drink.name} "
+                    f"(${drink.price_usd:.2f}). Top up at /topup/{sender.id}."
+        )
+        raise HTTPException(402, "insufficient balance")
+
+    # Move sats from sender's wallet to recipient's wallet via LNbits internal
+    # transfer. Same primitive as a drink purchase — just a different sink.
+    await state.ln.transfer_internal(
+        source_admin_key=sender.lnbits_admin_key,
+        dest_invoice_key=recipient.lnbits_invoice_key,
+        amount_sats=cost_sats,
+        memo=f"🎁 from {sender.name}: {drink.name}",
+    )
+
+    # Record the gift so the recipient sees a banner on their next tap.
+    state.db.create_gift(
+        sender_user_id=sender.id,
+        recipient_user_id=recipient.id,
+        drink_id=drink.id,
+        drink_name=drink.name,
+        amount_sats=cost_sats,
+        amount_usd=drink.price_usd,
+    )
+
+    # Ledger entries for both sides — keeps leaderboards & history complete.
+    state.db.record(
+        user_id=sender.id, kind="adjustment", drink_id=drink.id,
+        amount_sats=cost_sats, amount_usd=drink.price_usd,
+        meta={"event": "gift_sent",
+              "recipient_user_id": recipient.id,
+              "recipient_name": recipient.name,
+              "drink_name": drink.name},
+    )
+    state.db.record(
+        user_id=recipient.id, kind="adjustment", drink_id=drink.id,
+        amount_sats=cost_sats, amount_usd=drink.price_usd,
+        meta={"event": "gift_received",
+              "sender_user_id": sender.id,
+              "sender_name": sender.name,
+              "drink_name": drink.name},
+    )
+
+    await state.clear_session(
+        message=f"🎁 You gifted {recipient.name} a {drink.name}! "
+                f"They'll see it on their next tap."
+    )
+    return {
+        "status": "ok",
+        "recipient": recipient.name,
+        "drink": drink.name,
+        "charged_sats": cost_sats,
     }
 
 

@@ -7,6 +7,7 @@ drink Sarah bought last month").
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sqlite3
 import time
@@ -57,6 +58,21 @@ CREATE TABLE IF NOT EXISTS drinks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_drinks_active_sort ON drinks(active, sort_order);
+
+CREATE TABLE IF NOT EXISTS gifts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_user_id INTEGER NOT NULL REFERENCES users(id),
+    recipient_user_id INTEGER NOT NULL REFERENCES users(id),
+    drink_id TEXT,
+    drink_name TEXT,
+    amount_sats INTEGER NOT NULL,
+    amount_usd REAL NOT NULL,
+    timestamp INTEGER NOT NULL,
+    acknowledged_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_gifts_recipient_unack
+    ON gifts(recipient_user_id, acknowledged_at);
 """
 
 
@@ -93,6 +109,26 @@ class Drink:
             price_usd=row["price_usd"], description=row["description"],
             sort_order=row["sort_order"], active=bool(row["active"]),
         )
+
+
+@dataclass
+class Gift:
+    id: int
+    sender_user_id: int
+    recipient_user_id: int
+    drink_id: str | None
+    drink_name: str | None
+    amount_sats: int
+    amount_usd: float
+    timestamp: int
+    acknowledged_at: int | None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "Gift":
+        # Filter to declared fields so SELECT g.*, u.name AS sender_name (which
+        # adds an extra "sender_name" column) doesn't crash __init__.
+        fields = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: row[k] for k in row.keys() if k in fields})
 
 
 @dataclass
@@ -296,6 +332,51 @@ class Database:
                 [(d.id, d.name, d.emoji, d.price_usd, d.description,
                   d.sort_order, int(d.active)) for d in drinks],
             )
+
+    # -- gifts ---------------------------------------------------------------
+
+    def create_gift(self, *, sender_user_id: int, recipient_user_id: int,
+                     drink_id: str | None, drink_name: str | None,
+                     amount_sats: int, amount_usd: float) -> Gift:
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO gifts (sender_user_id, recipient_user_id,
+                    drink_id, drink_name, amount_sats, amount_usd, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (sender_user_id, recipient_user_id, drink_id, drink_name,
+                 amount_sats, amount_usd, int(time.time())),
+            )
+            row = conn.execute("SELECT * FROM gifts WHERE id = ?",
+                                (cur.lastrowid,)).fetchone()
+            return Gift.from_row(row)
+
+    def unacknowledged_gifts_for(self, recipient_user_id: int) -> list[tuple[Gift, str]]:
+        """Gifts the recipient hasn't seen yet, paired with sender names."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT g.*, u.name AS sender_name
+                FROM gifts g JOIN users u ON u.id = g.sender_user_id
+                WHERE g.recipient_user_id = ? AND g.acknowledged_at IS NULL
+                ORDER BY g.timestamp ASC
+                """,
+                (recipient_user_id,),
+            ).fetchall()
+            return [(Gift.from_row(r), r["sender_name"]) for r in rows]
+
+    def acknowledge_gifts_for(self, recipient_user_id: int) -> int:
+        """Mark all unacknowledged gifts as seen. Returns count acknowledged."""
+        with self.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE gifts SET acknowledged_at = ?
+                WHERE recipient_user_id = ? AND acknowledged_at IS NULL
+                """,
+                (int(time.time()), recipient_user_id),
+            )
+            return cur.rowcount
 
     # -- analytics -----------------------------------------------------------
 

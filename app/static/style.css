@@ -162,6 +162,65 @@ th { color: var(--accent); font-weight: 600; }
 
 .fine-print { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
 
+/* Gift banner shown when a recipient taps their card. */
+.gift-banner {
+    background: linear-gradient(135deg, rgba(192, 133, 82, 0.18), rgba(109, 182, 116, 0.12));
+    border: 1px solid rgba(192, 133, 82, 0.5);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    margin: 0 auto 1.5rem;
+    max-width: 600px;
+    text-align: left;
+}
+.gift-banner-line + .gift-banner-line { margin-top: 0.5rem; }
+.gift-banner em { font-style: normal; color: var(--accent); }
+
+/* Gift-a-drink button on the main menu. */
+.gift-btn {
+    margin-top: 1.5rem;
+    background: transparent;
+    color: var(--accent);
+    border: 2px solid var(--accent);
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.gift-btn:hover { background: rgba(192, 133, 82, 0.12); }
+
+/* Recipient picker grid in the gift flow. */
+.gift-flow { text-align: center; }
+.recipients-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    max-width: 800px;
+    margin: 1rem auto;
+}
+.recipient {
+    background: var(--card);
+    border: 2px solid transparent;
+    border-radius: 0.75rem;
+    padding: 1.25rem 0.75rem;
+    color: var(--fg);
+    cursor: pointer;
+    font: inherit;
+    transition: border-color 0.15s, transform 0.05s;
+}
+.recipient:hover { border-color: var(--accent); }
+.recipient:active { transform: scale(0.97); }
+.recipient-emoji { font-size: 2rem; }
+.recipient-name { margin-top: 0.5rem; }
+
+.cancel-btn {
+    margin-top: 1rem;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--muted);
+}
+.cancel-btn:hover { color: var(--fg); border-color: var(--fg); }
+
 /* Drinks admin */
 .drink-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; align-items: end; margin-bottom: 1rem; }
 .drink-add label { margin: 0; }
