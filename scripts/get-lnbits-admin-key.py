@@ -48,39 +48,102 @@ def _find_data_folder() -> Path:
     )
 
 
+def _find_data_folder_or_exit() -> Path:
+    """Locate LNbits' data folder by looking for the SQLite DB.
+    The .super_user file may or may not exist; we don't require it.
+    """
+    candidates = [
+        Path(os.environ.get("LNBITS_DATA_FOLDER", "/data")),
+        Path("/data"),
+        Path("/lnbits-data"),
+    ]
+    for p in candidates:
+        if (p / "database.sqlite3").exists():
+            return p
+    sys.exit(
+        "error: couldn't find LNbits' database.sqlite3. Tried:\n  "
+        + "\n  ".join(str(p) for p in candidates)
+        + "\n\nAre you running this inside the espresso-lnbits container?\n"
+        "  docker exec -i espresso-lnbits python3 < scripts/get-lnbits-admin-key.py"
+    )
+
+
 def main() -> int:
-    data = _find_data_folder()
-    super_user = (data / ".super_user").read_text().strip()
-    if not super_user:
-        sys.exit(f"error: {data}/.super_user is empty")
-
-    conn = sqlite3.connect(f"file:{data / 'database.sqlite3'}?mode=ro", uri=True)
-    try:
-        row = conn.execute(
-            'SELECT adminkey FROM wallets WHERE "user" = ? LIMIT 1',
-            (super_user,),
-        ).fetchone()
-    finally:
-        conn.close()
-
-    if not row or not row[0]:
-        sys.exit(f"error: no wallet row found for super-user {super_user}")
-    adminkey = row[0]
+    data = _find_data_folder_or_exit()
+    db_path = data / "database.sqlite3"
+    su_file = data / ".super_user"
 
     host = os.environ.get("HOST", "<your-host>")
     port = os.environ.get("LNBITS_PORT", "5000")
 
-    print(f"LNbits super-user URL:")
-    print(f"  http://{host}:{port}/wallet?usr={super_user}")
-    print()
-    print(f"LNbits admin API key:")
-    print(f"  {adminkey}")
-    print()
-    print("To bypass the auto-bootstrap, paste this into Dockge's Env tab")
-    print("for the espresso-app service, then redeploy:")
-    print()
-    print(f"  LNBITS_ADMIN_KEY={adminkey}")
+    # Path 1: super-user file exists. Print its info — this is the easy case.
+    if su_file.exists():
+        super_user = su_file.read_text().strip()
+        if super_user:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            try:
+                row = conn.execute(
+                    'SELECT adminkey FROM wallets WHERE "user" = ? LIMIT 1',
+                    (super_user,),
+                ).fetchone()
+            finally:
+                conn.close()
+            if row and row[0]:
+                _print_super_user_block(host, port, super_user, row[0])
+                return 0
+
+    # Path 2: no super-user file (LNbits 0.10.x doesn't write it until /admin
+    # is visited). Fall back to listing every wallet so the operator can pick
+    # one to promote to admin.
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        rows = conn.execute(
+            'SELECT "user", name, adminkey FROM wallets ORDER BY "user", name'
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        sys.exit(
+            "error: no wallets exist in LNbits yet.\n"
+            "Visit http://<your-host>:5000/wallet, create any wallet through\n"
+            "the UI (it just needs a name), then re-run this script."
+        )
+
+    _print_no_super_user_block(host, port, rows)
     return 0
+
+
+def _print_super_user_block(host: str, port: str, su: str, key: str) -> None:
+    print("LNbits super-user URL:")
+    print(f"  http://{host}:{port}/wallet?usr={su}")
+    print()
+    print("LNbits admin API key (super-user's wallet):")
+    print(f"  {key}")
+    print()
+    print("To bypass the espresso-app's auto-bootstrap, paste into Dockge's")
+    print("Env tab for the espresso-app service:")
+    print()
+    print(f"  LNBITS_ADMIN_KEY={key}")
+
+
+def _print_no_super_user_block(host: str, port: str, rows: list) -> None:
+    print(".super_user file not present — LNbits 0.10.x only creates it when")
+    print("someone visits /admin in a browser. Two ways to get unblocked:")
+    print()
+    print("OPTION 1 — let LNbits create the super-user properly:")
+    print(f"  Open http://{host}:{port}/admin once. That writes .super_user.")
+    print("  Then re-run this script for the easy path.")
+    print()
+    print("OPTION 2 — promote one of your existing wallet users to admin.")
+    print("Pick a row below, then in Dockge set TWO env vars and redeploy:")
+    print(f"  LNBITS_ADMIN_USERS=<user_id>          (on the lnbits service)")
+    print(f"  LNBITS_ADMIN_KEY=<adminkey>           (on the espresso-app service)")
+    print()
+    print(f"  {'user_id':<34}  {'wallet_name':<24}  adminkey")
+    print(f"  {'-' * 34}  {'-' * 24}  {'-' * 34}")
+    for u, n, k in rows:
+        print(f"  {u:<34}  {(n or '')[:24]:<24}  {k}")
 
 
 if __name__ == "__main__":
