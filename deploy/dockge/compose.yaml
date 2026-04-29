@@ -73,6 +73,11 @@ services:
       DATABASE_PATH: /data/espresso.sqlite3
     volumes:
       - espresso-data:/data
+      # Read-only mount of LNbits' data volume so the app can auto-discover
+      # the LNbits super-user's admin API key on first boot. Without this,
+      # /onboard fails with 401 unless the operator manually sets
+      # LNBITS_ADMIN_KEY env after fishing the key out of LNbits' UI.
+      - lnbits-data:/lnbits-data:ro
 
   # -------------------------------------------------------------------------
   # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.

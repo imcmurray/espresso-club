@@ -17,6 +17,7 @@ Machine-to-machine:
 from __future__ import annotations
 
 import logging
+import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -36,12 +37,67 @@ logging.basicConfig(level=logging.INFO,
 log = logging.getLogger("espresso")
 
 
+def _bootstrap_lnbits_admin_key() -> str | None:
+    """Discover the LNbits super-user's wallet admin API key by reading the
+    mounted lnbits-data volume.
+
+    Why: the espresso app needs an admin key to call the User Manager
+    extension's POST /usermanager/api/v1/users (which creates per-staff
+    sub-wallets). Forcing operators to log into LNbits, find the key, and
+    paste it into env makes "clone the repo and deploy" significantly less
+    smooth. Instead, we read /lnbits-data/.super_user (LNbits writes this on
+    first boot when LNBITS_ADMIN_UI=true) and look up that user's wallet's
+    admin key in LNbits' own SQLite. Read-only — we never mutate LNbits' DB.
+
+    Returns None if the mount or files are missing; caller falls back to the
+    LNBITS_ADMIN_KEY env var (which still wins if set explicitly).
+    """
+    su_path = Path("/lnbits-data/.super_user")
+    db_path = Path("/lnbits-data/database.sqlite3")
+    if not su_path.exists() or not db_path.exists():
+        return None
+    try:
+        super_user_id = su_path.read_text().strip()
+        if not super_user_id:
+            return None
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                'SELECT adminkey FROM wallets WHERE "user" = ? LIMIT 1',
+                (super_user_id,),
+            ).fetchone()
+            return row["adminkey"] if row and row["adminkey"] else None
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        log.warning("LNbits admin-key bootstrap query failed: %s", e)
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     drinks_cfg = get_drinks()
     db = Database(settings.database_path)
-    ln = LNbitsClient(settings.lnbits_url, settings.lnbits_admin_key)
+
+    # If the operator didn't set LNBITS_ADMIN_KEY explicitly, try to discover
+    # it from the mounted lnbits-data volume so onboarding works out of the
+    # box on a fresh deploy.
+    admin_key = settings.lnbits_admin_key
+    if not admin_key:
+        discovered = _bootstrap_lnbits_admin_key()
+        if discovered:
+            admin_key = discovered
+            log.info("bootstrapped LNbits admin key from /lnbits-data "
+                     "(super-user wallet); set LNBITS_ADMIN_KEY env to override")
+        else:
+            log.warning("LNBITS_ADMIN_KEY is empty and /lnbits-data is not "
+                        "mounted/populated — onboarding will fail with 401. "
+                        "Mount lnbits-data:/lnbits-data:ro on this service "
+                        "(see docker-compose.yml) or set LNBITS_ADMIN_KEY.")
+
+    ln = LNbitsClient(settings.lnbits_url, admin_key)
     relay = make_relay(settings.relay_driver, settings.shelly_host)
 
     # First-boot seed: if the drinks table is empty, populate it from the

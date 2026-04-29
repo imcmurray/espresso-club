@@ -113,6 +113,11 @@ services:
     volumes:
       - espresso-data:/data
       - ./app/drinks.yaml:/app/drinks.yaml:ro
+      # Read-only mount so the app can auto-discover the LNbits super-user's
+      # admin API key on first boot (see _bootstrap_lnbits_admin_key in
+      # app/main.py). Avoids forcing the operator to copy the key from
+      # LNbits' UI into LNBITS_ADMIN_KEY env.
+      - lnbits-data:/lnbits-data:ro
     # healthcheck declared in the Dockerfile
 
   # -----------------------------------------------------------------------------
