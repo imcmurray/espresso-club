@@ -42,6 +42,11 @@ services:
       LNBITS_SITE_TITLE: "Espresso Club"
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
       LNBITS_BACKEND_WALLET_CLASS: FakeWallet
+      # Auto-install the User Manager extension. Required for the espresso
+      # app's onboarding flow (creates an LNbits sub-wallet per staff member).
+      # Without this, /onboard submissions 404 on a fresh stack.
+      LNBITS_EXTENSIONS_MANIFESTS: "https://raw.githubusercontent.com/lnbits/lnbits-extensions/main/extensions.json"
+      LNBITS_EXTENSIONS_DEFAULT_INSTALL: "usermanager"
     volumes:
       - lnbits-data:/data
 

@@ -129,6 +129,15 @@ python3 -m pytest tests/    # unit tests (fast, hermetic)
   picks the default SQLite path under `LNBITS_DATA_FOLDER`. Setting an
   explicit `sqlite://` URL re-triggers the bug.
 
+- **LNbits User Manager extension**: auto-installed on first boot via
+  `LNBITS_EXTENSIONS_MANIFESTS` + `LNBITS_EXTENSIONS_DEFAULT_INSTALL=usermanager`.
+  Required for the espresso app's onboarding flow (`/onboard` creates a
+  sub-wallet per staff member via the User Manager API). Without this, every
+  onboarding submission 404s on `/usermanager/api/v1/users`. If you're seeing
+  that error on an existing deploy, either redeploy the stack so the env vars
+  take effect, or open the LNbits admin UI → Manage Extensions → install
+  User Manager manually as a one-time fix.
+
 ## Known issues
 
 ### Building Docker images inside an LXC with broken AppArmor

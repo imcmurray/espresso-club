@@ -38,6 +38,11 @@ services:
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
       # Default to FakeWallet — switch to PhoenixdWallet via .env when going live.
       LNBITS_BACKEND_WALLET_CLASS: ${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}
+      # Auto-install the User Manager extension so the espresso app's
+      # /usermanager/api/v1/users endpoint exists. Without this, every
+      # /onboard submission 404s on first fresh deploy.
+      LNBITS_EXTENSIONS_MANIFESTS: "https://raw.githubusercontent.com/lnbits/lnbits-extensions/main/extensions.json"
+      LNBITS_EXTENSIONS_DEFAULT_INSTALL: "usermanager"
       # Phoenixd config (only used when LNBITS_BACKEND_WALLET_CLASS=PhoenixdWallet)
       PHOENIXD_API_ENDPOINT: ${PHOENIXD_API_ENDPOINT:-http://phoenixd:9740/}
       PHOENIXD_API_PASSWORD: ${PHOENIXD_API_PASSWORD:-}
