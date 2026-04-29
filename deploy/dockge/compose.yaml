@@ -87,6 +87,14 @@ services:
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
       LNBITS_BACKEND_WALLET_CLASS: PhoenixdWallet
       PHOENIXD_API_ENDPOINT: http://phoenixd:9740/
+      # Allow login cookies over plain HTTP. Default is True (HTTPS-only),
+      # which silently breaks the web UI login on LAN deploys: the browser
+      # accepts the Set-Cookie response but won't persist a Secure cookie
+      # without HTTPS, so every subsequent request comes back unauthenticated.
+      # Flip to "true" if you put this stack behind an HTTPS reverse proxy.
+      # NB: auth settings don't use the LNBITS_ prefix — env name is just
+      # AUTH_HTTPS_ONLY.
+      AUTH_HTTPS_ONLY: "false"
     volumes:
       - lnbits-data:/data
       # Read-only mount so the lnbits boot script can read Phoenixd's

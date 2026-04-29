@@ -71,6 +71,10 @@ services:
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
       LNBITS_BACKEND_WALLET_CLASS: ${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}
       PHOENIXD_API_ENDPOINT: ${PHOENIXD_API_ENDPOINT:-http://phoenixd:9740/}
+      # Allow login cookies over plain HTTP (default LNbits setting forces
+      # Secure flag, which browsers silently drop on http:// hosts). Auth
+      # settings have no LNBITS_ prefix — env name is just AUTH_HTTPS_ONLY.
+      AUTH_HTTPS_ONLY: ${AUTH_HTTPS_ONLY:-false}
     volumes:
       - lnbits-data:/data
       - phoenixd-data:/phoenixd-data:ro   # for password discovery; tolerated if empty
