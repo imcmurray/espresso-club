@@ -20,6 +20,34 @@
 
 services:
   # -------------------------------------------------------------------------
+  # One-shot init: pre-writes /data/.super_user with a freshly generated UUID
+  # on the very first boot. LNbits 0.10.x picks up this file on startup and
+  # creates that user as the super-admin (with auto-generated wallet +
+  # adminkey). The espresso-app's auto-bootstrap then discovers everything
+  # without any manual env-var paste.
+  #
+  # Idempotent: if /data/.super_user already exists, the init no-ops.
+  # -------------------------------------------------------------------------
+  lnbits-init:
+    image: alpine:3.20
+    container_name: espresso-lnbits-init
+    restart: "no"
+    volumes:
+      - lnbits-data:/data
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ ! -f /data/.super_user ]; then
+          uuid="$$(cat /proc/sys/kernel/random/uuid | tr -d -)"
+          printf '%s' "$$uuid" > /data/.super_user
+          echo "[lnbits-init] wrote /data/.super_user: $$uuid"
+        else
+          echo "[lnbits-init] /data/.super_user already exists; skipping"
+        fi
+
+  # -------------------------------------------------------------------------
   # LNbits — multi-user Lightning wallet system. Each staff member gets a
   # sub-wallet. Pinned to 0.10.10 because newer images have a SQLite migration
   # bug. See README.md "Pinned dependencies & known upstream quirks".
@@ -30,6 +58,9 @@ services:
     image: lnbitsdocker/lnbits-legend:0.10.10
     container_name: espresso-lnbits
     restart: unless-stopped
+    depends_on:
+      lnbits-init:
+        condition: service_completed_successfully
     security_opt:
       - apparmor=unconfined
     ports:

@@ -170,6 +170,14 @@ python3 -m pytest tests/    # unit tests (fast, hermetic)
   take effect, or open the LNbits admin UI → Manage Extensions → install
   User Manager manually as a one-time fix.
 
+- **LNbits super-user**: an `lnbits-init` one-shot service generates a UUID
+  on first boot and writes it to `/data/.super_user` before LNbits starts.
+  LNbits picks up that ID and creates a wallet for it as super-admin
+  automatically. The espresso-app's auto-bootstrap then discovers the wallet
+  adminkey from LNbits' SQLite DB without any manual env-var paste. The init
+  service is idempotent — on subsequent boots it sees the file already
+  exists and no-ops.
+
 ## Known issues
 
 ### Building Docker images inside an LXC with broken AppArmor
