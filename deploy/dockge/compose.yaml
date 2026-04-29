@@ -1,0 +1,134 @@
+# Espresso Club — Dockge stack
+#
+# Self-contained compose file for use with Dockge (https://github.com/louislam/dockge).
+# Differences vs. the dev-friendly docker-compose.yml at the repo root:
+#   - Pull-only: no `build:` blocks. All images come from GHCR.
+#   - No external file mounts. drinks.yaml is baked into the app image; to
+#     customize prices, either:
+#       a) rebuild the app image with your edited app/drinks.yaml, OR
+#       b) add a bind mount once Dockge's stack dir holds your drinks.yaml.
+#   - Phoenixd and Slack-bot are commented out at the bottom; uncomment when
+#     you're ready to switch from FakeWallet to real Lightning, or wire Slack.
+#
+# To deploy:
+#   1. In Dockge: New Stack → name it "espresso-club" → paste this file.
+#   2. Switch to the Env tab if you want to override defaults (e.g. pin a
+#      specific image tag via ESPRESSO_TAG=<git-sha>, or set RELAY_DRIVER=shelly).
+#   3. Hit Deploy. Dockge runs `docker compose pull` then `up -d`.
+#
+# Reach the UI at http://<dockge-host>:8080/menu after a minute or so.
+
+services:
+  # -------------------------------------------------------------------------
+  # LNbits — multi-user Lightning wallet system. Each staff member gets a
+  # sub-wallet. Pinned to 0.10.10 because newer images have a SQLite migration
+  # bug. See README.md "Pinned dependencies & known upstream quirks".
+  # The LNBITS_DATABASE_URL is intentionally NOT set — leaving it unset lets
+  # LNbits derive the SQLite path from LNBITS_DATA_FOLDER and avoids the bug.
+  # -------------------------------------------------------------------------
+  lnbits:
+    image: lnbitsdocker/lnbits-legend:0.10.10
+    container_name: espresso-lnbits
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "5000:5000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: 5000
+      LNBITS_DATA_FOLDER: /data
+      LNBITS_ADMIN_UI: "true"
+      LNBITS_SITE_TITLE: "Espresso Club"
+      LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
+      LNBITS_BACKEND_WALLET_CLASS: FakeWallet
+    volumes:
+      - lnbits-data:/data
+
+  # -------------------------------------------------------------------------
+  # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API.
+  # -------------------------------------------------------------------------
+  espresso-app:
+    image: ghcr.io/imcmurray/espresso-club/app:${ESPRESSO_TAG:-latest}
+    container_name: espresso-app
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      - lnbits
+    ports:
+      - "8080:8080"
+    environment:
+      LNBITS_URL: http://lnbits:5000
+      LNBITS_ADMIN_KEY: ${LNBITS_ADMIN_KEY:-}
+      RELAY_DRIVER: ${RELAY_DRIVER:-simulator}
+      SHELLY_HOST: ${SHELLY_HOST:-}
+      GRINDER_PULSE_SECONDS: ${GRINDER_PULSE_SECONDS:-30}
+      DRINKS_CONFIG: /app/drinks.yaml
+      DATABASE_PATH: /data/espresso.sqlite3
+    volumes:
+      - espresso-data:/data
+
+  # -------------------------------------------------------------------------
+  # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.
+  # Default = simulator, listens on :9999/tap so you can fake taps without
+  # hardware. Flip TAP_SIMULATOR=false once a real PN532 is plugged in.
+  # -------------------------------------------------------------------------
+  nfc-daemon:
+    image: ghcr.io/imcmurray/espresso-club/nfc:${ESPRESSO_TAG:-latest}
+    container_name: espresso-nfc
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      - espresso-app
+    ports:
+      - "9999:9999"   # simulator endpoint
+    environment:
+      ESPRESSO_APP_URL: http://espresso-app:8080
+      TAP_SIMULATOR: ${TAP_SIMULATOR:-true}
+      NFC_DEVICE: ${NFC_DEVICE:-usb}
+
+  # -------------------------------------------------------------------------
+  # Phoenixd — uncomment when going live with real Lightning. See
+  # docs/phoenixd.md for the seed-handling and LNbits wiring procedure.
+  # -------------------------------------------------------------------------
+  # phoenixd:
+  #   image: acinq/phoenixd:0.5.1
+  #   container_name: espresso-phoenixd
+  #   restart: unless-stopped
+  #   security_opt:
+  #     - apparmor=unconfined
+  #   ports:
+  #     - "127.0.0.1:9740:9740"
+  #   environment:
+  #     PHOENIX_SEED: ${PHOENIX_SEED:-}
+  #   volumes:
+  #     - phoenixd-data:/phoenix/.phoenix
+  #   command:
+  #     - --http-bind-ip=0.0.0.0
+  #     - --http-bind-port=9740
+  #     - --agree-to-terms-of-service
+
+  # -------------------------------------------------------------------------
+  # Slack bot — uncomment + supply tokens to enable /espresso commands and
+  # daily low-balance pings.
+  # -------------------------------------------------------------------------
+  # slack-bot:
+  #   image: ghcr.io/imcmurray/espresso-club/slack:${ESPRESSO_TAG:-latest}
+  #   container_name: espresso-slack-bot
+  #   restart: unless-stopped
+  #   security_opt:
+  #     - apparmor=unconfined
+  #   depends_on:
+  #     - espresso-app
+  #   environment:
+  #     SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+  #     SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+  #     ESPRESSO_APP_URL: http://espresso-app:8080
+  #     LOW_BALANCE_THRESHOLD_USD: "2.00"
+
+volumes:
+  lnbits-data:
+  espresso-data:
+  # phoenixd-data:   # uncomment if you enable phoenixd above

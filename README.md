@@ -105,6 +105,7 @@ visibility to public for each of the three images so anyone can `docker pull`:
 
 ## Documentation
 
+- [`deploy/dockge/`](./deploy/dockge/) — drop-in [Dockge](https://github.com/louislam/dockge) stack file
 - [`docs/release-pipeline.md`](./docs/release-pipeline.md) — push → GHA → GHCR → LXC pull-and-run loop, plus the monthly LNbits-unpin routine. **Start here if you're returning to the project after a break.**
 - [`docs/phoenixd.md`](./docs/phoenixd.md) — switching from FakeWallet to real Lightning
 - [`docs/hardware.md`](./docs/hardware.md) — Pi assembly, wiring, kiosk setup
