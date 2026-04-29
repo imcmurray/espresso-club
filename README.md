@@ -138,8 +138,9 @@ visibility to public for each of the three images so anyone can `docker pull`:
 ## Documentation
 
 - [`deploy/dockge/`](./deploy/dockge/) — drop-in [Dockge](https://github.com/louislam/dockge) stack file
+- [`docs/lightning-testing.md`](./docs/lightning-testing.md) — **switching to real Lightning** (Phoenixd) and end-to-end testing the topup → drink → gift → sweep flow with real BTC.
 - [`docs/release-pipeline.md`](./docs/release-pipeline.md) — push → GHA → GHCR → LXC pull-and-run loop, plus the monthly LNbits-unpin routine. **Start here if you're returning to the project after a break.**
-- [`docs/phoenixd.md`](./docs/phoenixd.md) — switching from FakeWallet to real Lightning
+- [`docs/phoenixd.md`](./docs/phoenixd.md) — older Phoenixd reference (superseded by lightning-testing.md but kept for context)
 - [`docs/hardware.md`](./docs/hardware.md) — Pi assembly, wiring, kiosk setup
 - [`docs/operations.md`](./docs/operations.md) — onboarding, topping up, refilling, auditing
 

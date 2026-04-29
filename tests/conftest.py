@@ -41,13 +41,15 @@ class FakeLNbits:
         pass
 
     async def create_user_and_wallet(self, *, user_name, wallet_name=None):
+        # Mirrors POST /api/v1/account in LNbits v1.5+: anonymous, no auth,
+        # returns a single wallet keyed for the implicit new user.
         wid = f"w{self._next_id}"
         self._next_id += 1
         w = FakeWallet(
             id=wid,
             invoice_key=f"inv-{wid}",
             admin_key=f"adm-{wid}",
-            name=wallet_name or user_name,
+            name=wallet_name or f"{user_name}'s tab",
         )
         self.wallets[wid] = w
         return type("WalletInfo", (), dict(

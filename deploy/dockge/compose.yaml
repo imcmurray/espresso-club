@@ -1,76 +1,166 @@
 # Espresso Club — Dockge stack
 #
 # Self-contained compose file for use with Dockge (https://github.com/louislam/dockge).
-# Differences vs. the dev-friendly docker-compose.yml at the repo root:
-#   - Pull-only: no `build:` blocks. All images come from GHCR.
-#   - No external file mounts. drinks.yaml is baked into the app image; to
-#     customize prices, either:
-#       a) rebuild the app image with your edited app/drinks.yaml, OR
-#       b) add a bind mount once Dockge's stack dir holds your drinks.yaml.
-#   - Phoenixd and Slack-bot are commented out at the bottom; uncomment when
-#     you're ready to switch from FakeWallet to real Lightning, or wire Slack.
+# Defaults give you a fully-self-custodial Lightning espresso club in one paste:
+# Phoenixd holds real BTC, LNbits manages per-staff sub-wallets, the espresso
+# app coordinates onboarding/topups/drinks/gifts, and the NFC daemon bridges
+# the PN532 reader (with a simulator fallback for hardware-free dev).
 #
 # To deploy:
 #   1. In Dockge: New Stack → name it "espresso-club" → paste this file.
-#   2. Switch to the Env tab if you want to override defaults (e.g. pin a
-#      specific image tag via ESPRESSO_TAG=<git-sha>, or set RELAY_DRIVER=shelly).
+#   2. (Optional) Switch to the Env tab to override defaults
+#      (e.g. ESPRESSO_TAG=<git-sha> to pin a specific build, RELAY_DRIVER=shelly).
 #   3. Hit Deploy. Dockge runs `docker compose pull` then `up -d`.
+#   4. **CRITICAL** — On first boot, capture Phoenixd's 12-word seed phrase
+#      from the espresso-phoenixd container logs. It is shown ONCE and there
+#      is no way to recover funds if the volume is destroyed without the seed.
+#      See docs/lightning-testing.md.
 #
 # Reach the UI at http://<dockge-host>:8080/menu after a minute or so.
 
 services:
   # -------------------------------------------------------------------------
-  # LNbits — multi-user Lightning wallet system. Each staff member gets a
-  # sub-wallet. Pinned to 0.10.10 because newer images have a SQLite migration
-  # bug. See README.md "Pinned dependencies & known upstream quirks".
-  # The LNBITS_DATABASE_URL is intentionally NOT set — leaving it unset lets
-  # LNbits derive the SQLite path from LNBITS_DATA_FOLDER and avoids the bug.
+  # Phoenixd — ACINQ's headless Lightning daemon. Self-custodial, automatic
+  # channel management via ACINQ's LSP (no Bitcoin Core needed). Real BTC
+  # lives here.
   #
-  # The command override generates a stable SUPER_USER UUID on first boot
-  # and exports it as env. LNbits 0.10.10 reads SUPER_USER (not the
-  # .super_user file) to know which user has full admin rights. We persist
-  # the UUID in /data/.super_user so it survives container restarts and so
-  # the espresso-app's auto-bootstrap can read it.
+  # On first boot it generates a 12-word seed and prints it to logs ONCE.
+  # WRITE IT DOWN. The seed is the only thing whose loss is permanent —
+  # everything else can be rebuilt from it.
+  #
+  # The HTTP API password is auto-generated and stored in
+  # /phoenix/.phoenix/phoenix.conf. The lnbits service mounts that volume
+  # read-only and reads the password at startup, so the operator never has
+  # to copy/paste credentials.
+  # -------------------------------------------------------------------------
+  phoenixd:
+    image: acinq/phoenixd:0.7.3
+    container_name: espresso-phoenixd
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "127.0.0.1:9740:9740"   # localhost-only — only LNbits should reach this
+    volumes:
+      - phoenixd-data:/phoenix/.phoenix
+    healthcheck:
+      # Phoenixd is "ready" when phoenix.conf has been generated. After that,
+      # the HTTP API is reachable too.
+      test: ["CMD-SHELL", "test -f /phoenix/.phoenix/phoenix.conf"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 30s
+
+  # -------------------------------------------------------------------------
+  # LNbits — multi-user Lightning wallet system. Each staff member gets a
+  # sub-wallet. Uses Phoenixd as its funding source so internal transfers
+  # (drinks, gifts) stay free and only outbound/inbound to the wider Lightning
+  # Network pays Phoenixd's small fees.
+  #
+  # Pinned to v1.5.4 (the official lnbits/lnbits image) — the lnbitsdocker
+  # legacy images stop at 0.11 and don't have PhoenixdWallet support.
+  #
+  # The command override on first boot:
+  #  1) generates a SUPER_USER UUID into /data/.super_user (idempotent).
+  #  2) reads the Phoenixd HTTP password from the read-only mount of
+  #     phoenixd-data and exports it as PHOENIXD_API_PASSWORD.
+  #  3) starts LNbits with PhoenixdWallet as the funding source.
   # -------------------------------------------------------------------------
   lnbits:
-    image: lnbitsdocker/lnbits-legend:0.10.10
+    image: lnbits/lnbits:v1.5.4
     container_name: espresso-lnbits
     restart: unless-stopped
-    command:
-      - sh
-      - -c
-      - |
-        if [ ! -f /data/.super_user ]; then
-          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
-          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
-        fi
-        export SUPER_USER="$$(cat /data/.super_user)"
-        exec poetry run lnbits --port "$${PORT:-5000}" --host "$${HOST:-0.0.0.0}"
+    depends_on:
+      phoenixd:
+        condition: service_healthy
     security_opt:
       - apparmor=unconfined
     ports:
       - "5000:5000"
     environment:
-      HOST: 0.0.0.0
-      PORT: 5000
+      LNBITS_HOST: 0.0.0.0
+      LNBITS_PORT: 5000
       LNBITS_DATA_FOLDER: /data
       LNBITS_ADMIN_UI: "true"
       LNBITS_SITE_TITLE: "Espresso Club"
       LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
-      LNBITS_BACKEND_WALLET_CLASS: FakeWallet
-      # Auto-install the User Manager extension. Required for the espresso
-      # app's onboarding flow (creates an LNbits sub-wallet per staff member).
-      # Without this, /onboard submissions 404 on a fresh stack.
-      LNBITS_EXTENSIONS_MANIFESTS: "https://raw.githubusercontent.com/lnbits/lnbits-extensions/main/extensions.json"
-      LNBITS_EXTENSIONS_DEFAULT_INSTALL: "usermanager"
+      LNBITS_BACKEND_WALLET_CLASS: PhoenixdWallet
+      PHOENIXD_API_ENDPOINT: http://phoenixd:9740/
     volumes:
       - lnbits-data:/data
+      # Read-only mount so the lnbits boot script can read Phoenixd's
+      # auto-generated HTTP password from phoenix.conf without anyone
+      # copying it by hand.
+      - phoenixd-data:/phoenixd-data:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        # 1. Super-user bootstrap. LNbits reads SUPER_USER (env) to mark a
+        #    user as full admin. We persist the UUID in /data/.super_user so
+        #    container restarts use the same one and so the espresso-app's
+        #    auto-bootstrap can find it.
+        if [ ! -f /data/.super_user ]; then
+          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
+          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
+        fi
+        export SUPER_USER="$$(cat /data/.super_user)"
+        # 2. Phoenixd password discovery. The phoenixd container writes its
+        #    auto-generated HTTP API password to phoenix.conf in its data
+        #    volume. Wait up to 60s in case phoenixd is slow to first-boot.
+        for i in $$(seq 1 60); do
+          [ -f /phoenixd-data/phoenix.conf ] && break
+          echo "[lnbits-bootstrap] waiting for phoenix.conf... ($$i/60)"
+          sleep 1
+        done
+        if [ ! -f /phoenixd-data/phoenix.conf ]; then
+          echo "[lnbits-bootstrap] FATAL: /phoenixd-data/phoenix.conf missing after 60s"
+          exit 1
+        fi
+        export PHOENIXD_API_PASSWORD="$$(grep '^http-password=' /phoenixd-data/phoenix.conf | cut -d= -f2)"
+        if [ -z "$$PHOENIXD_API_PASSWORD" ]; then
+          echo "[lnbits-bootstrap] FATAL: couldn't extract http-password from phoenix.conf"
+          exit 1
+        fi
+        echo "[lnbits-bootstrap] discovered Phoenixd API password (len=$${#PHOENIXD_API_PASSWORD})"
+        # 3. Start LNbits. v1.5.4 uses `uv`, not `poetry`.
+        exec uv --offline run lnbits --port "$${LNBITS_PORT:-5000}" --host "$${LNBITS_HOST:-0.0.0.0}" --forwarded-allow-ips='*'
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health').read()\""]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 60s
+
+  # -------------------------------------------------------------------------
+  # LNbits init — one-shot bootstrap that runs after lnbits is healthy:
+  #   1. Completes the first-install wizard via API (idempotent).
+  #   2. Saves admin credentials to /lnbits-data/admin.json (mode 600).
+  #   3. Installs the User Manager extension (required for onboarding).
+  # On subsequent boots: detects already-done state and exits cleanly.
+  # The bootstrap script is fetched from GitHub at runtime so this stack
+  # stays a single-paste compose file.
+  # -------------------------------------------------------------------------
+  lnbits-init:
+    image: python:3.12-slim
+    container_name: espresso-lnbits-init
+    restart: "no"
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      lnbits:
+        condition: service_healthy
+    volumes:
+      - lnbits-data:/lnbits-data
+    environment:
+      LNBITS_URL: http://lnbits:5000
+      INIT_SCRIPT_URL: "https://raw.githubusercontent.com/imcmurray/espresso-club/main/scripts/lnbits-init.py"
+    command:
+      - sh
+      - -c
+      - "python3 -c 'import urllib.request, os; open(\"/tmp/init.py\",\"wb\").write(urllib.request.urlopen(os.environ[\"INIT_SCRIPT_URL\"]).read())' && python3 /tmp/init.py"
 
   # -------------------------------------------------------------------------
   # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API.
@@ -84,6 +174,8 @@ services:
     depends_on:
       lnbits:
         condition: service_healthy
+      lnbits-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
@@ -123,27 +215,6 @@ services:
       NFC_DEVICE: ${NFC_DEVICE:-usb}
 
   # -------------------------------------------------------------------------
-  # Phoenixd — uncomment when going live with real Lightning. See
-  # docs/phoenixd.md for the seed-handling and LNbits wiring procedure.
-  # -------------------------------------------------------------------------
-  # phoenixd:
-  #   image: acinq/phoenixd:0.5.1
-  #   container_name: espresso-phoenixd
-  #   restart: unless-stopped
-  #   security_opt:
-  #     - apparmor=unconfined
-  #   ports:
-  #     - "127.0.0.1:9740:9740"
-  #   environment:
-  #     PHOENIX_SEED: ${PHOENIX_SEED:-}
-  #   volumes:
-  #     - phoenixd-data:/phoenix/.phoenix
-  #   command:
-  #     - --http-bind-ip=0.0.0.0
-  #     - --http-bind-port=9740
-  #     - --agree-to-terms-of-service
-
-  # -------------------------------------------------------------------------
   # Slack bot — uncomment + supply tokens to enable /espresso commands and
   # daily low-balance pings.
   # -------------------------------------------------------------------------
@@ -162,6 +233,6 @@ services:
   #     LOW_BALANCE_THRESHOLD_USD: "2.00"
 
 volumes:
+  phoenixd-data:
   lnbits-data:
   espresso-data:
-  # phoenixd-data:   # uncomment if you enable phoenixd above

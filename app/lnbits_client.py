@@ -51,36 +51,38 @@ class LNbitsClient:
 
     async def _request(self, method: str, path: str, *, key: str | None = None,
                         json: dict | None = None) -> dict:
-        headers = {"X-Api-Key": key or self.admin_key}
+        # /api/v1/account is unauthenticated; everything else uses an X-Api-Key.
+        headers = {}
+        api_key = key if key is not None else self.admin_key
+        if api_key:
+            headers["X-Api-Key"] = api_key
         r = await self._client.request(method, f"{self.base_url}{path}",
                                         headers=headers, json=json)
         if r.status_code >= 400:
             raise LNbitsError(f"{method} {path} -> {r.status_code}: {r.text}")
         return r.json() if r.content else {}
 
-    # -- user manager (sub-wallet per staff member) --------------------------
+    # -- account / wallet creation -------------------------------------------
 
     async def create_user_and_wallet(self, *, user_name: str,
                                       wallet_name: str | None = None) -> WalletInfo:
-        """Create an LNbits user with a single wallet.
+        """Create a fresh LNbits user-and-wallet for one staff member.
 
-        Returns the wallet's keys, which we persist for that staff member.
+        Uses POST /api/v1/account, which is built into LNbits v1.5+ and
+        doesn't require admin auth (each call creates a new
+        independently-keyed wallet). The legacy User Manager extension
+        served the same purpose on older LNbits releases but no longer has
+        a v1.x-compatible release in the manifests, so we use the core
+        endpoint directly.
         """
-        body = {
-            "user_name": user_name,
-            "wallet_name": wallet_name or f"{user_name}'s tab",
-        }
-        data = await self._request("POST", "/usermanager/api/v1/users", json=body)
-        wallets = data.get("wallets") or []
-        if not wallets:
-            raise LNbitsError(f"LNbits returned no wallet for user: {data!r}")
-        w = wallets[0]
+        body = {"name": wallet_name or f"{user_name}'s tab"}
+        data = await self._request("POST", "/api/v1/account", json=body)
         return WalletInfo(
-            id=w["id"],
-            name=w["name"],
-            balance_sats=int(w.get("balance_msat", 0)) // 1000,
-            admin_key=w["adminkey"],
-            invoice_key=w["inkey"],
+            id=data["id"],
+            name=data["name"],
+            balance_sats=int(data.get("balance_msat", 0)) // 1000,
+            admin_key=data["adminkey"],
+            invoice_key=data["inkey"],
         )
 
     # -- wallet balance / invoices / payments --------------------------------

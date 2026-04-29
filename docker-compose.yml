@@ -1,11 +1,15 @@
 # Espresso Club — Lightning stack + app
 #
-# Default profile (no --profile flag): LNbits w/ FakeWallet + the espresso app.
-# Adds Phoenixd when run with --profile phoenixd for real Lightning.
+# Default (no profile): LNbits w/ FakeWallet + the espresso app. No real LN
+# traffic — useful for dev and tests.
+#
+# Production: pass --profile phoenixd to add a real ACINQ Lightning node.
+# LNbits switches to PhoenixdWallet automatically because the lnbits service
+# detects the phoenixd-data volume's phoenix.conf file at startup.
 #
 # Usage:
 #   docker compose up -d                          # dev: FakeWallet
-#   docker compose --profile phoenixd up -d        # prod: Phoenixd (mainnet)
+#   docker compose --profile phoenixd up -d       # prod: Phoenixd
 #
 # All containers use apparmor=unconfined per LXC requirements (see /project/CLAUDE.md).
 
@@ -13,95 +17,128 @@ name: espresso-club
 
 services:
   # -----------------------------------------------------------------------------
-  # LNbits — multi-user Lightning wallet system. Each staff member gets a
-  # sub-wallet with its own balance. Talks to a "funding source" beneath it
-  # (FakeWallet for dev, Phoenixd for real LN).
-  # -----------------------------------------------------------------------------
-  lnbits:
-    image: lnbitsdocker/lnbits-legend:0.10.10
-    container_name: espresso-lnbits
-    restart: unless-stopped
-    # Generate a stable SUPER_USER UUID on first boot, persist in
-    # /data/.super_user, and export as env on every start. LNbits 0.10.10
-    # reads SUPER_USER (not the file) to know which user has full admin
-    # rights. We write the file too because the espresso-app's
-    # auto-bootstrap reads /lnbits-data/.super_user to find the same value.
-    command:
-      - sh
-      - -c
-      - |
-        if [ ! -f /data/.super_user ]; then
-          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
-          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
-        fi
-        export SUPER_USER="$$(cat /data/.super_user)"
-        exec poetry run lnbits --port "$${PORT:-5000}" --host "$${HOST:-0.0.0.0}"
-    security_opt:
-      - apparmor=unconfined
-    ports:
-      - "5000:5000"
-    environment:
-      HOST: 0.0.0.0
-      PORT: 5000
-      LNBITS_DATA_FOLDER: /data
-      # Note: LNBITS_DATABASE_URL is intentionally not set. When unset, LNbits
-      # uses its built-in SQLite path under LNBITS_DATA_FOLDER. Setting an
-      # explicit sqlite:// URL triggers a PostgreSQL-only migration query
-      # that fails on SQLite (LNbits issue across recent versions).
-      LNBITS_ADMIN_UI: "true"
-      LNBITS_SITE_TITLE: "Espresso Club"
-      LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
-      # Default to FakeWallet — switch to PhoenixdWallet via .env when going live.
-      LNBITS_BACKEND_WALLET_CLASS: ${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}
-      # Auto-install the User Manager extension so the espresso app's
-      # /usermanager/api/v1/users endpoint exists. Without this, every
-      # /onboard submission 404s on first fresh deploy.
-      LNBITS_EXTENSIONS_MANIFESTS: "https://raw.githubusercontent.com/lnbits/lnbits-extensions/main/extensions.json"
-      LNBITS_EXTENSIONS_DEFAULT_INSTALL: "usermanager"
-      # Phoenixd config (only used when LNBITS_BACKEND_WALLET_CLASS=PhoenixdWallet)
-      PHOENIXD_API_ENDPOINT: ${PHOENIXD_API_ENDPOINT:-http://phoenixd:9740/}
-      PHOENIXD_API_PASSWORD: ${PHOENIXD_API_PASSWORD:-}
-    volumes:
-      - lnbits-data:/data
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; urllib.request.urlopen('http://localhost:5000/api/v1/health').read()\""]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  # -----------------------------------------------------------------------------
-  # Phoenixd — headless ACINQ Lightning daemon. Auto-managed channels via
-  # ACINQ's LSP, no Bitcoin Core required. Real keys, real Lightning.
-  # Only started when --profile phoenixd is passed.
+  # Phoenixd — ACINQ's headless Lightning daemon. Optional; gated by --profile
+  # phoenixd. Self-custodial, automatic channel management. Real BTC lives here.
+  # First boot generates a 12-word seed and prints it to logs ONCE — write it
+  # down. The HTTP API password is auto-generated and stored in
+  # /phoenix/.phoenix/phoenix.conf, which the lnbits service reads via a
+  # read-only mount.
   # -----------------------------------------------------------------------------
   phoenixd:
-    image: acinq/phoenixd:0.5.1
+    image: acinq/phoenixd:0.7.3
     container_name: espresso-phoenixd
     restart: unless-stopped
     profiles: ["phoenixd"]
     security_opt:
       - apparmor=unconfined
     ports:
-      - "127.0.0.1:9740:9740"   # REST API — bind to localhost only
-    environment:
-      PHOENIX_SEED: ${PHOENIX_SEED:-}
+      - "127.0.0.1:9740:9740"
     volumes:
       - phoenixd-data:/phoenix/.phoenix
-    command:
-      - --http-bind-ip=0.0.0.0
-      - --http-bind-port=9740
-      - --agree-to-terms-of-service
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9740/getinfo --header=\"Authorization: Basic $(echo -n :$$PHOENIX_PASSWORD | base64)\" || exit 1"]
-      interval: 30s
+      test: ["CMD-SHELL", "test -f /phoenix/.phoenix/phoenix.conf"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 30s
+
+  # -----------------------------------------------------------------------------
+  # LNbits — multi-user Lightning wallet system. Each staff member gets a
+  # sub-wallet. v1.5.4 is the official lnbits/lnbits image (the older
+  # lnbitsdocker/lnbits-legend stops at 0.11 and lacks PhoenixdWallet).
+  #
+  # The command override on first boot:
+  #  1) generates a SUPER_USER UUID into /data/.super_user (idempotent).
+  #  2) if /phoenixd-data/phoenix.conf is present (phoenixd profile is up),
+  #     reads the API password and switches funding source to PhoenixdWallet.
+  #  3) otherwise stays on whatever LNBITS_BACKEND_WALLET_CLASS is set to
+  #     (default FakeWallet, fine for dev and tests).
+  # -----------------------------------------------------------------------------
+  lnbits:
+    image: lnbits/lnbits:v1.5.4
+    container_name: espresso-lnbits
+    restart: unless-stopped
+    security_opt:
+      - apparmor=unconfined
+    ports:
+      - "5000:5000"
+    environment:
+      LNBITS_HOST: 0.0.0.0
+      LNBITS_PORT: 5000
+      LNBITS_DATA_FOLDER: /data
+      LNBITS_ADMIN_UI: "true"
+      LNBITS_SITE_TITLE: "Espresso Club"
+      LNBITS_SITE_TAGLINE: "fair coffee, fast settlement"
+      LNBITS_BACKEND_WALLET_CLASS: ${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}
+      PHOENIXD_API_ENDPOINT: ${PHOENIXD_API_ENDPOINT:-http://phoenixd:9740/}
+    volumes:
+      - lnbits-data:/data
+      - phoenixd-data:/phoenixd-data:ro   # for password discovery; tolerated if empty
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ ! -f /data/.super_user ]; then
+          cat /proc/sys/kernel/random/uuid | tr -d - > /data/.super_user
+          echo "[lnbits-bootstrap] generated SUPER_USER: $$(cat /data/.super_user)"
+        fi
+        export SUPER_USER="$$(cat /data/.super_user)"
+        # If the operator asked for PhoenixdWallet, wait for the phoenixd
+        # service to write phoenix.conf — there's a brief race window even
+        # with depends_on: service_healthy. Otherwise fall through to
+        # whatever LNBITS_BACKEND_WALLET_CLASS is set to (FakeWallet by default).
+        if [ "$${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}" = "PhoenixdWallet" ]; then
+          for i in $$(seq 1 60); do
+            [ -f /phoenixd-data/phoenix.conf ] && break
+            echo "[lnbits-bootstrap] waiting for phoenix.conf... ($$i/60)"
+            sleep 1
+          done
+          if [ ! -f /phoenixd-data/phoenix.conf ]; then
+            echo "[lnbits-bootstrap] FATAL: phoenix.conf never appeared"
+            exit 1
+          fi
+          export PHOENIXD_API_PASSWORD="$$(grep '^http-password=' /phoenixd-data/phoenix.conf | cut -d= -f2)"
+          echo "[lnbits-bootstrap] PhoenixdWallet (api=$${PHOENIXD_API_ENDPOINT})"
+        elif [ -f /phoenixd-data/phoenix.conf ]; then
+          # Volume mounted and phoenixd already up — opportunistically use it
+          # even if env didn't request it.
+          export LNBITS_BACKEND_WALLET_CLASS=PhoenixdWallet
+          export PHOENIXD_API_PASSWORD="$$(grep '^http-password=' /phoenixd-data/phoenix.conf | cut -d= -f2)"
+          echo "[lnbits-bootstrap] auto-detected Phoenixd, using PhoenixdWallet"
+        else
+          echo "[lnbits-bootstrap] using $${LNBITS_BACKEND_WALLET_CLASS:-FakeWallet}"
+        fi
+        exec uv --offline run lnbits --port "$${LNBITS_PORT:-5000}" --host "$${LNBITS_HOST:-0.0.0.0}" --forwarded-allow-ips='*'
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health').read()\""]
+      interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 12
       start_period: 60s
 
   # -----------------------------------------------------------------------------
-  # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API for the NFC
-  # daemon and Slack bot to call into.
+  # LNbits init — completes first-install wizard + installs User Manager
+  # extension via API, idempotently. Runs after lnbits is healthy, exits 0.
+  # -----------------------------------------------------------------------------
+  lnbits-init:
+    image: python:3.12-slim
+    container_name: espresso-lnbits-init
+    restart: "no"
+    security_opt:
+      - apparmor=unconfined
+    depends_on:
+      lnbits:
+        condition: service_healthy
+    volumes:
+      - lnbits-data:/lnbits-data
+      - ./scripts/lnbits-init.py:/init.py:ro
+    environment:
+      LNBITS_URL: http://lnbits:5000
+    command: ["python3", "/init.py"]
+
+  # -----------------------------------------------------------------------------
+  # Espresso app — FastAPI/HTMX touchscreen UI + admin + REST API.
   # -----------------------------------------------------------------------------
   espresso-app:
     image: ghcr.io/imcmurray/espresso-club/app:${ESPRESSO_TAG:-latest}
@@ -115,6 +152,8 @@ services:
     depends_on:
       lnbits:
         condition: service_healthy
+      lnbits-init:
+        condition: service_completed_successfully
     ports:
       - "8080:8080"
     environment:
@@ -128,16 +167,10 @@ services:
     volumes:
       - espresso-data:/data
       - ./app/drinks.yaml:/app/drinks.yaml:ro
-      # Read-only mount so the app can auto-discover the LNbits super-user's
-      # admin API key on first boot (see _bootstrap_lnbits_admin_key in
-      # app/main.py). Avoids forcing the operator to copy the key from
-      # LNbits' UI into LNBITS_ADMIN_KEY env.
       - lnbits-data:/lnbits-data:ro
-    # healthcheck declared in the Dockerfile
 
   # -----------------------------------------------------------------------------
   # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.
-  # Default mode = simulator: exposes :9999/tap so curl can fake a tap.
   # -----------------------------------------------------------------------------
   nfc-daemon:
     image: ghcr.io/imcmurray/espresso-club/nfc:${ESPRESSO_TAG:-latest}
@@ -152,19 +185,16 @@ services:
       espresso-app:
         condition: service_healthy
     ports:
-      - "9999:9999"   # simulator only — harmless to expose
+      - "9999:9999"
     environment:
       ESPRESSO_APP_URL: http://espresso-app:8080
       TAP_SIMULATOR: ${TAP_SIMULATOR:-true}
       NFC_DEVICE: ${NFC_DEVICE:-usb}
-    devices:
-      # Pass the USB device through when running on real hardware.
-      # Comment out if you don't have a PN532 plugged in.
-      []
+    devices: []
 
   # -----------------------------------------------------------------------------
   # Slack bot — onboarding + low-balance DMs + leaderboard. Only starts if
-  # SLACK_BOT_TOKEN is provided.
+  # SLACK_BOT_TOKEN is provided AND --profile slack is passed.
   # -----------------------------------------------------------------------------
   slack-bot:
     image: ghcr.io/imcmurray/espresso-club/slack:${ESPRESSO_TAG:-latest}
