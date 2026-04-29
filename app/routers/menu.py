@@ -21,7 +21,7 @@ async def menu(request: Request):
         {
             "request": request,
             "session": session,
-            "drinks": state.drinks.drinks,
+            "drinks": state.list_active_drinks(),
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
             "message": state.last_message,
         },
@@ -38,7 +38,7 @@ async def menu_state(request: Request):
         {
             "request": request,
             "session": session,
-            "drinks": state.drinks.drinks,
+            "drinks": state.list_active_drinks(),
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
             "message": state.last_message,
         },

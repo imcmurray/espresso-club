@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS ledger (
 
 CREATE INDEX IF NOT EXISTS idx_ledger_user_ts ON ledger(user_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ledger_kind ON ledger(kind);
+
+CREATE TABLE IF NOT EXISTS drinks (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    emoji TEXT NOT NULL DEFAULT '',
+    price_usd REAL NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE INDEX IF NOT EXISTS idx_drinks_active_sort ON drinks(active, sort_order);
 """
 
 
@@ -62,6 +74,25 @@ class User:
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
         return cls(**{k: row[k] for k in row.keys()})
+
+
+@dataclass
+class Drink:
+    id: str
+    name: str
+    emoji: str
+    price_usd: float
+    description: str
+    sort_order: int
+    active: bool
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "Drink":
+        return cls(
+            id=row["id"], name=row["name"], emoji=row["emoji"],
+            price_usd=row["price_usd"], description=row["description"],
+            sort_order=row["sort_order"], active=bool(row["active"]),
+        )
 
 
 @dataclass
@@ -197,6 +228,76 @@ class Database:
                 (limit,),
             ).fetchall()
             return [(_to_entry(r), r["user_name"]) for r in rows]
+
+    # -- drinks --------------------------------------------------------------
+
+    def list_drinks(self, *, active_only: bool = True) -> list[Drink]:
+        sql = ("SELECT * FROM drinks "
+               + ("WHERE active = 1 " if active_only else "")
+               + "ORDER BY sort_order, name")
+        with self.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+            return [Drink.from_row(r) for r in rows]
+
+    def get_drink(self, drink_id: str) -> Drink | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM drinks WHERE id = ?", (drink_id,)
+            ).fetchone()
+            return Drink.from_row(row) if row else None
+
+    def create_drink(self, drink: Drink) -> Drink:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO drinks (id, name, emoji, price_usd, description,
+                    sort_order, active)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (drink.id, drink.name, drink.emoji, drink.price_usd,
+                 drink.description, drink.sort_order, int(drink.active)),
+            )
+        return drink
+
+    def update_drink(self, drink_id: str, *, name: str, emoji: str,
+                      price_usd: float, description: str,
+                      sort_order: int, active: bool) -> Drink | None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE drinks
+                   SET name = ?, emoji = ?, price_usd = ?, description = ?,
+                       sort_order = ?, active = ?
+                 WHERE id = ?
+                """,
+                (name, emoji, price_usd, description, sort_order,
+                 int(active), drink_id),
+            )
+        return self.get_drink(drink_id)
+
+    def soft_delete_drink(self, drink_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute("UPDATE drinks SET active = 0 WHERE id = ?", (drink_id,))
+
+    def count_drinks(self) -> int:
+        with self.connect() as conn:
+            row = conn.execute("SELECT COUNT(*) AS n FROM drinks").fetchone()
+            return int(row["n"])
+
+    def seed_drinks(self, drinks: list[Drink]) -> None:
+        """Bulk-insert. Used on first boot when the drinks table is empty."""
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO drinks (id, name, emoji, price_usd,
+                    description, sort_order, active)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [(d.id, d.name, d.emoji, d.price_usd, d.description,
+                  d.sort_order, int(d.active)) for d in drinks],
+            )
+
+    # -- analytics -----------------------------------------------------------
 
     def leaderboard(self, since_ts: int) -> list[tuple[str, int, int]]:
         """Top spenders since `since_ts`. Returns (name, drinks, sats_spent)."""

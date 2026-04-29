@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 
 from config import get_drinks, get_settings
-from db import Database
+from db import Database, Drink
 from lnbits_client import LNbitsClient
 from relay import make_relay
 from routers import admin, api, menu, onboard, topup
@@ -39,12 +39,25 @@ log = logging.getLogger("espresso")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    drinks = get_drinks()
+    drinks_cfg = get_drinks()
     db = Database(settings.database_path)
     ln = LNbitsClient(settings.lnbits_url, settings.lnbits_admin_key)
     relay = make_relay(settings.relay_driver, settings.shelly_host)
 
-    state = AppState(settings=settings, drinks=drinks, db=db, ln=ln, relay=relay)
+    # First-boot seed: if the drinks table is empty, populate it from the
+    # YAML. After that, the YAML is ignored — the admin UI is the source of
+    # truth. To re-seed (e.g. blow away your edits), delete the drinks table.
+    if db.count_drinks() == 0:
+        db.seed_drinks([
+            Drink(id=d.id, name=d.name, emoji=d.emoji,
+                  price_usd=d.price_usd, description=d.description,
+                  sort_order=i, active=True)
+            for i, d in enumerate(drinks_cfg.drinks)
+        ])
+        log.info("seeded %d drinks from %s", len(drinks_cfg.drinks),
+                 settings.drinks_config)
+
+    state = AppState(settings=settings, drinks=drinks_cfg, db=db, ln=ln, relay=relay)
     app.state.app_state = state
 
     log.info("Espresso app starting — relay=%s lnbits=%s",

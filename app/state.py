@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 
 from config import DrinksConfig, Settings
-from db import Database
+from db import Database, Drink
 from lnbits_client import LNbitsClient
 from relay import Relay
 
@@ -64,3 +64,12 @@ class AppState:
         if self.current and self.current.is_active():
             return self.current
         return None
+
+    # -- drinks live in the DB now; YAML is just a seed source ---------------
+
+    def list_active_drinks(self) -> list[Drink]:
+        return self.db.list_drinks(active_only=True)
+
+    def get_drink(self, drink_id: str) -> Drink | None:
+        d = self.db.get_drink(drink_id)
+        return d if (d and d.active) else None

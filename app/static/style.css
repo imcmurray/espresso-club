@@ -142,3 +142,30 @@ th { color: var(--accent); font-weight: 600; }
 .leaderboard .empty { color: var(--muted); list-style: none; margin-left: -1.5rem; }
 
 .fine-print { color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }
+
+/* Drinks admin */
+.drink-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; align-items: end; margin-bottom: 1rem; }
+.drink-add label { margin: 0; }
+.drink-add button { grid-column: span 2; height: 2.5rem; }
+
+.drinks-table tbody tr.inactive { opacity: 0.45; }
+.drinks-table tbody tr.editing { background: rgba(192, 133, 82, 0.08); }
+.drinks-table input { width: 100%; padding: 0.35rem; font-size: 0.9rem;
+    background: var(--bg); color: var(--fg); border: 1px solid var(--muted);
+    border-radius: 0.25rem; }
+.drinks-table .emoji-cell { font-size: 1.4rem; }
+.drinks-table .emoji-input { font-size: 1.1rem; text-align: center; }
+.drinks-table .actions { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.drinks-table .actions button { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+.drinks-table .actions button.danger { background: var(--bad); }
+
+.toggle { display: inline-block; cursor: pointer; }
+.toggle input { display: none; }
+.toggle span { display: inline-block; width: 36px; height: 20px;
+    background: var(--muted); border-radius: 10px; position: relative;
+    transition: background 0.15s; }
+.toggle span::after { content: ""; position: absolute; left: 2px; top: 2px;
+    width: 16px; height: 16px; background: var(--fg); border-radius: 50%;
+    transition: left 0.15s; }
+.toggle input:checked + span { background: var(--good); }
+.toggle input:checked + span::after { left: 18px; }

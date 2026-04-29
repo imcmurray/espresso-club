@@ -62,7 +62,7 @@ async def buy_drink(drink_id: str, request: Request):
     if not session:
         raise HTTPException(409, "no active session — tap your card first")
 
-    drink = state.drinks.get(drink_id)
+    drink = state.get_drink(drink_id)
     if not drink:
         raise HTTPException(404, "unknown drink")
 

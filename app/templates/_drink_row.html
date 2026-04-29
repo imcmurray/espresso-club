@@ -1,0 +1,20 @@
+<tr id="drink-{{ d.id }}" class="{% if not d.active %}inactive{% endif %}">
+    <td>{{ d.sort_order }}</td>
+    <td class="emoji-cell">{{ d.emoji }}</td>
+    <td>{{ d.name }}<br><small>{{ d.id }}</small></td>
+    <td>${{ "%.2f"|format(d.price_usd) }}</td>
+    <td>{{ d.description }}</td>
+    <td>{% if d.active %}✓{% else %}—{% endif %}</td>
+    <td class="actions">
+        <button hx-get="/admin/drinks/{{ d.id }}/edit"
+                hx-target="#drink-{{ d.id }}"
+                hx-swap="outerHTML">Edit</button>
+        {% if d.active %}
+        <button class="danger"
+                hx-post="/admin/drinks/{{ d.id }}/delete"
+                hx-target="#drink-{{ d.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Hide '{{ d.name }}' from the menu? Existing ledger entries are kept.">Hide</button>
+        {% endif %}
+    </td>
+</tr>
