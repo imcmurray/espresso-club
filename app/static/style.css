@@ -39,6 +39,25 @@ nav a:hover { opacity: 1; }
 
 main { padding: 2rem; max-width: 1100px; margin: 0 auto; }
 
+/* Link colors — body-content links inherited browser defaults (blue/purple)
+   which were near-invisible on the dark background. Use the copper accent so
+   visited links don't fade out either. */
+main a, .session-card a, .idle a, .invoice-card a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    text-decoration-color: rgba(192, 133, 82, 0.5);
+    transition: color 0.1s, text-decoration-color 0.1s;
+}
+main a:hover, .session-card a:hover, .idle a:hover, .invoice-card a:hover {
+    color: #d49b6a;
+    text-decoration-color: #d49b6a;
+}
+main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visited {
+    color: var(--accent);
+}
+
 .idle {
     text-align: center;
     padding: 4rem 1rem;
