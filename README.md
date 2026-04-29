@@ -84,9 +84,44 @@ python3 -m pytest tests/    # unit tests (fast, hermetic)
 
 ## Known issues
 
-- **Building Docker images inside an LXC with broken apparmor**: if `docker
-  compose build` fails with `apparmor_parser: Access denied`, that's an
-  LXC-host config issue, not a project bug. Fix on the host: add `"apparmor":
-  false` to `/etc/docker/daemon.json` and restart Docker, or build on a
-  non-LXC machine and push the image. Real Raspberry Pi OS deployments don't
-  hit this.
+### Building Docker images inside an LXC with broken AppArmor
+
+If `docker compose build` fails with one of:
+
+```
+apparmor_parser: Access denied. You need policy admin privileges to manage profiles.
+```
+
+```
+runc run failed: ... unable to apply apparmor profile:
+write fsmount:fscontext:proc/thread-self/attr/apparmor/exec: no such file or directory
+```
+
+…that's an LXC-host config issue, not a project bug. The kernel exposes
+AppArmor as enabled but the LXC namespace doesn't have access to write the
+required `/proc/<pid>/attr/apparmor/exec` interface, so every intermediate
+build container fails to start.
+
+**What does *not* fix it (don't bother trying):**
+- Adding `"apparmor": false` to `/etc/docker/daemon.json` — that's not a valid
+  daemon directive and Docker refuses to start.
+- `DOCKER_BUILDKIT=0 docker compose build` — the legacy builder hits the same
+  `apparmor_parser` error because the daemon, not the builder, is what tries
+  to apply the profile.
+- `docker buildx build --security-opt apparmor=unconfined` — runc still tries
+  to write to the missing `/proc/.../attr/apparmor/` interface and fails.
+
+**What actually fixes it (host-side, requires Proxmox/LXC config access):**
+- Configure the LXC to either disable AppArmor entirely (`lxc.apparmor.profile = unconfined` plus passing through the apparmor securityfs), or grant the
+  LXC the `lxc.cap.keep` / `mount` capabilities it needs to write to
+  `/proc/.../attr/apparmor/`.
+- Or, simplest: build images on a non-LXC machine and push them to a registry
+  the LXC can pull from.
+
+Container **runtime** works fine in this LXC because every service uses
+`security_opt: [apparmor=unconfined]` — that flag bypasses the runtime
+profile load. The problem is build-time only, where there's no equivalent
+escape hatch.
+
+Real Raspberry Pi OS / VM deployments don't encounter this at all; it is
+specific to Proxmox-style LXC containers with restricted AppArmor access.
