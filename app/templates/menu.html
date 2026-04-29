@@ -2,9 +2,10 @@
 {% block title %}Tap to start · Espresso Club{% endblock %}
 {% block content %}
 <div id="screen"
+     hx-ext="morph"
      hx-get="/menu/state"
      hx-trigger="every 1s"
-     hx-swap="innerHTML">
+     hx-swap="morph:innerHTML">
     {% include "_menu_state.html" %}
 </div>
 {% endblock %}
