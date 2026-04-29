@@ -72,7 +72,14 @@ async def topup_invoice(request: Request, user_id: int, amount_usd: float):
 
 @router.get("/topup/{user_id}/check/{payment_hash}", response_class=HTMLResponse)
 async def topup_check(request: Request, user_id: int, payment_hash: str):
-    """HTMX poll target — returns 'paid' fragment when the invoice settles."""
+    """HTMX poll target — returns 'paid' fragment when the invoice settles.
+
+    While the invoice is unpaid, return an empty body with HX-Reswap: none.
+    HTMX honors that header by skipping the swap entirely, so the existing
+    QR card stays mounted and the user can keep scanning. The hx-trigger on
+    the card ('every 2s') is preserved, so polling continues. Only once the
+    invoice is paid do we return real content that replaces the card.
+    """
     state = request.app.state.app_state
     user = state.db.get_user(user_id)
     if not user:
@@ -82,7 +89,7 @@ async def topup_check(request: Request, user_id: int, payment_hash: str):
         invoice_key=user.lnbits_invoice_key, payment_hash=payment_hash,
     )
     if not paid:
-        return HTMLResponse("<div hx-swap-oob='true' id='status'>waiting…</div>")
+        return HTMLResponse("", headers={"HX-Reswap": "none"})
 
     balance_sats = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
     state.db.record(
