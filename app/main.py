@@ -52,13 +52,28 @@ def _bootstrap_lnbits_admin_key() -> str | None:
     Returns None if the mount or files are missing; caller falls back to the
     LNBITS_ADMIN_KEY env var (which still wins if set explicitly).
     """
-    su_path = Path("/lnbits-data/.super_user")
-    db_path = Path("/lnbits-data/database.sqlite3")
-    if not su_path.exists() or not db_path.exists():
+    mount_root = Path("/lnbits-data")
+    su_path = mount_root / ".super_user"
+    db_path = mount_root / "database.sqlite3"
+    if not mount_root.is_dir():
+        log.warning("LNbits admin-key bootstrap: %s isn't a directory — "
+                    "is the lnbits-data:/lnbits-data:ro mount missing from "
+                    "this service in compose?", mount_root)
+        return None
+    if not su_path.exists():
+        log.warning("LNbits admin-key bootstrap: %s missing. LNbits writes "
+                    "this on first boot when LNBITS_ADMIN_UI=true; if you "
+                    "see this on a fresh stack, check that LNbits actually "
+                    "started (check 'docker logs espresso-lnbits').", su_path)
+        return None
+    if not db_path.exists():
+        log.warning("LNbits admin-key bootstrap: %s missing. LNbits' SQLite "
+                    "DB should be in the same data folder.", db_path)
         return None
     try:
         super_user_id = su_path.read_text().strip()
         if not super_user_id:
+            log.warning("LNbits admin-key bootstrap: %s is empty", su_path)
             return None
         conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
@@ -67,7 +82,14 @@ def _bootstrap_lnbits_admin_key() -> str | None:
                 'SELECT adminkey FROM wallets WHERE "user" = ? LIMIT 1',
                 (super_user_id,),
             ).fetchone()
-            return row["adminkey"] if row and row["adminkey"] else None
+            if row and row["adminkey"]:
+                return row["adminkey"]
+            log.warning("LNbits admin-key bootstrap: super-user %s has no "
+                        "wallet row in %s yet. This usually self-resolves "
+                        "after the first request to LNbits forces wallet "
+                        "creation; restart this container to retry.",
+                        super_user_id, db_path)
+            return None
         finally:
             conn.close()
     except sqlite3.Error as e:
@@ -92,10 +114,12 @@ async def lifespan(app: FastAPI):
             log.info("bootstrapped LNbits admin key from /lnbits-data "
                      "(super-user wallet); set LNBITS_ADMIN_KEY env to override")
         else:
-            log.warning("LNBITS_ADMIN_KEY is empty and /lnbits-data is not "
-                        "mounted/populated — onboarding will fail with 401. "
-                        "Mount lnbits-data:/lnbits-data:ro on this service "
-                        "(see docker-compose.yml) or set LNBITS_ADMIN_KEY.")
+            log.warning("LNBITS_ADMIN_KEY is empty and bootstrap failed (see "
+                        "warnings above) — onboarding will fail with 401. "
+                        "Either: (a) mount lnbits-data:/lnbits-data:ro on "
+                        "this service in compose, or (b) set LNBITS_ADMIN_KEY "
+                        "env (run scripts/lnbits-admin-url.sh on the host to "
+                        "fetch the value).")
 
     ln = LNbitsClient(settings.lnbits_url, admin_key)
     relay = make_relay(settings.relay_driver, settings.shelly_host)

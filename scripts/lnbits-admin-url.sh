@@ -47,3 +47,29 @@ echo "LNbits admin URL:"
 echo "  http://$HOST:$PORT/wallet?usr=$uid"
 echo
 echo "Bookmark it. The URL is the credential — anyone with it has full admin."
+
+# Also fish the super-user wallet's admin API key out of LNbits' SQLite, using
+# Python (LNbits' own runtime). The sqlite3 CLI binary isn't shipped in the
+# lnbits image, so we go via Python's stdlib sqlite3 module instead.
+adminkey=$(docker exec "$CONTAINER" python3 -c "
+import sqlite3, sys
+try:
+    conn = sqlite3.connect('/data/database.sqlite3')
+    row = conn.execute(
+        'SELECT adminkey FROM wallets WHERE \"user\" = ? LIMIT 1',
+        ('$uid',),
+    ).fetchone()
+    print(row[0] if row else '', end='')
+except Exception as e:
+    print('ERR:' + str(e), file=sys.stderr)
+" 2>/dev/null || true)
+
+if [ -n "$adminkey" ] && [[ "$adminkey" != ERR:* ]]; then
+    echo
+    echo "LNbits admin API key (for the super-user's wallet):"
+    echo "  $adminkey"
+    echo
+    echo "If your espresso-app's auto-bootstrap isn't working (e.g. the"
+    echo "lnbits-data:/lnbits-data:ro mount isn't in place), set this in env:"
+    echo "  LNBITS_ADMIN_KEY=$adminkey"
+fi
