@@ -38,25 +38,34 @@ async def onboard_form(request: Request, card: str | None = None):
     )
 
 
-@router.get("/onboard/poll", response_class=HTMLResponse)
-async def onboard_poll(request: Request):
-    """HTMX poll target. Returns whichever fragment matches the current
-    freshness state:
+@router.get("/onboard/poll/form", response_class=HTMLResponse)
+async def onboard_poll_from_form(request: Request):
+    """Polled by the form view. Returns:
+      - HX-Reswap: none while the card is still fresh (no DOM mutation,
+        input value the user is typing stays put).
+      - The waiting fragment once the freshness window expires, swapping
+        the form out so a stale UID can't be submitted.
+    """
+    state = request.app.state.app_state
+    if state.recent_unknown_tap():
+        return HTMLResponse("", headers={"HX-Reswap": "none"})
+    return templates.TemplateResponse(request, "_onboard_waiting.html", {})
 
-    - Fresh unknown tap → form fragment (idempotent re-render; morph keeps
-      the form mounted and preserves any input value the user has typed).
-    - No fresh tap → waiting fragment, swapping the form back out so the
-      operator can't submit a stale UID.
+
+@router.get("/onboard/poll/waiting", response_class=HTMLResponse)
+async def onboard_poll_from_waiting(request: Request):
+    """Polled by the waiting view. Returns:
+      - HX-Reswap: none while no card has been tapped (waiting view stays).
+      - The form fragment as soon as an unknown card hits the reader,
+        swapping the waiting view out so the user can finish onboarding.
     """
     state = request.app.state.app_state
     card_uid = state.recent_unknown_tap()
-    if card_uid:
-        return templates.TemplateResponse(
-            request, "_onboard_form.html",
-            {"prefilled_card_uid": card_uid},
-        )
+    if not card_uid:
+        return HTMLResponse("", headers={"HX-Reswap": "none"})
     return templates.TemplateResponse(
-        request, "_onboard_waiting.html", {},
+        request, "_onboard_form.html",
+        {"prefilled_card_uid": card_uid},
     )
 
 
