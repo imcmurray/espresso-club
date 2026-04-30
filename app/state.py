@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from config import DrinksConfig, Settings
 from db import Database, Drink
 from lnbits_client import LNbitsClient
+from phoenixd_client import PhoenixdClient
 from relay import Relay
 
 
@@ -55,6 +56,7 @@ class AppState:
     db: Database
     ln: LNbitsClient
     relay: Relay
+    phoenixd: PhoenixdClient | None = None
 
     current: CurrentSession | None = None
     last_message: str | None = None

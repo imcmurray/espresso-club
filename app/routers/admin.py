@@ -121,6 +121,35 @@ async def drinks_delete(request: Request, drink_id: str):
     )
 
 
+# -- Phoenixd / Lightning node status --------------------------------------
+
+@router.get("/admin/node", response_class=HTMLResponse)
+async def admin_node(request: Request):
+    """Lightning node status: phoenixd connectivity, channel balances,
+    recent payments. Phoenixd doesn't implement LNbits's "Node API"
+    (which assumes LND/CLN-shaped channel detail), so this page calls
+    Phoenixd's own HTTP API directly."""
+    state = request.app.state.app_state
+    snap = await state.phoenixd.snapshot() if state.phoenixd else None
+
+    # Total sats currently parked in user sub-wallets (sum across LNbits
+    # users). For an espresso club, this is "money the staff have credit for"
+    # vs. the operator wallet's "money you can sweep out."
+    user_sats_total = 0
+    for u in state.db.list_users():
+        try:
+            user_sats_total += await state.ln.wallet_balance_sats(
+                invoice_key=u.lnbits_invoice_key)
+        except Exception:
+            pass
+
+    return templates.TemplateResponse(
+        request, "admin_node.html",
+        {"snap": snap, "user_sats_total": user_sats_total,
+         "sats_to_usd": sats_to_usd},
+    )
+
+
 # -- main dashboard ---------------------------------------------------------
 
 @router.get("/admin", response_class=HTMLResponse)

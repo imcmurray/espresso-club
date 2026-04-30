@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Lightning node · Espresso Club{% endblock %}
+{% block content %}
+<section class="admin">
+    <h2>Lightning node</h2>
+
+    {% if not snap or not snap.reachable %}
+    <div class="status-card status-down">
+        <h3>⚠️ Phoenixd not reachable</h3>
+        <p>{% if snap and snap.error %}{{ snap.error }}{% else %}
+        The espresso-app couldn't talk to Phoenixd. Either the
+        <code>phoenixd-data</code> volume isn't mounted into this container
+        (so we can't auto-discover the API password), or Phoenixd itself
+        isn't running.
+        {% endif %}</p>
+        <p class="fine-print">If you're running with FakeWallet for dev,
+        this is expected and harmless — there's no real Lightning node to
+        report on.</p>
+    </div>
+    {% else %}
+
+    <div class="status-card status-up">
+        <h3>🟢 Phoenixd connected</h3>
+        <table class="kv">
+            <tr><th>Node ID</th><td><code class="small">{{ snap.info.node_id }}</code></td></tr>
+            <tr><th>Chain</th><td>{{ snap.info.chain }}</td></tr>
+            <tr><th>Phoenixd version</th><td>{{ snap.info.version }}</td></tr>
+            <tr><th>Open channels</th><td>{{ snap.info.channels_count }}</td></tr>
+        </table>
+    </div>
+
+    <h3>Balances</h3>
+    <div class="balance-grid">
+        <div class="balance-cell">
+            <div class="balance-label">Phoenixd spendable</div>
+            <div class="balance-value">
+                {% if snap.balance %}
+                {{ snap.balance.balance_sats }} sats
+                <small>(${{ "%.2f"|format(sats_to_usd(snap.balance.balance_sats)) }})</small>
+                {% else %}—{% endif %}
+            </div>
+            <div class="balance-note">Total sats Phoenixd has across open Lightning channels.</div>
+        </div>
+        <div class="balance-cell">
+            <div class="balance-label">Fee credit (ACINQ)</div>
+            <div class="balance-value">
+                {% if snap.balance %}
+                {{ snap.balance.fee_credit_sats }} sats
+                <small>(${{ "%.2f"|format(sats_to_usd(snap.balance.fee_credit_sats)) }})</small>
+                {% else %}—{% endif %}
+            </div>
+            <div class="balance-note">Pre-paid fees ACINQ holds for inbound liquidity events.</div>
+        </div>
+        <div class="balance-cell">
+            <div class="balance-label">User credits (LNbits)</div>
+            <div class="balance-value">
+                {{ user_sats_total }} sats
+                <small>(${{ "%.2f"|format(sats_to_usd(user_sats_total)) }})</small>
+            </div>
+            <div class="balance-note">Sum of all staff sub-wallet balances. Anything above this in Phoenixd is sweepable revenue.</div>
+        </div>
+    </div>
+
+    {% if snap.channels %}
+    <h3>Channels</h3>
+    <table class="channels">
+        <thead>
+            <tr><th>Channel ID</th><th>State</th><th>Capacity</th><th>Balance</th></tr>
+        </thead>
+        <tbody>
+            {% for c in snap.channels %}
+            <tr>
+                <td><code class="small">{{ (c.get('channelId') or c.get('channel_id') or '?')[:16] }}…</code></td>
+                <td>{{ c.get('state', 'unknown') }}</td>
+                <td>
+                    {% set cap = c.get('capacitySat') or c.get('capacity_sat') %}
+                    {% if cap %}{{ cap }} sats{% else %}—{% endif %}
+                </td>
+                <td>
+                    {% set bal = c.get('balanceSat') or c.get('balance_sat') or c.get('localBalanceSat') %}
+                    {% if bal is not none %}{{ bal }} sats{% else %}—{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <h3>Channels</h3>
+    <p class="fine-print">
+        No channels yet. ACINQ opens one automatically the first time you
+        receive an inbound payment. Generate a topup invoice and pay it
+        from a personal Lightning wallet to bootstrap.
+    </p>
+    {% endif %}
+
+    {% if snap.incoming %}
+    <h3>Recent incoming payments</h3>
+    <table>
+        <thead><tr><th>When</th><th>Amount</th><th>Description</th></tr></thead>
+        <tbody>
+            {% for p in snap.incoming[:10] %}
+            <tr>
+                <td>{{ p.get('completedAt') or p.get('createdAt') or '?' }}</td>
+                <td>{{ p.get('receivedSat') or p.get('amount_sat') or '?' }} sats</td>
+                <td>{{ (p.get('description') or '')[:60] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if snap.outgoing %}
+    <h3>Recent outgoing payments</h3>
+    <table>
+        <thead><tr><th>When</th><th>Amount</th><th>Fees</th></tr></thead>
+        <tbody>
+            {% for p in snap.outgoing[:10] %}
+            <tr>
+                <td>{{ p.get('completedAt') or p.get('createdAt') or '?' }}</td>
+                <td>{{ p.get('sent') or p.get('amount_sat') or '?' }} sats</td>
+                <td>{{ p.get('fees') or p.get('feesSat') or '?' }} sats</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% endif %}
+
+    <p><a href="/admin">← back to admin</a></p>
+</section>
+{% endblock %}

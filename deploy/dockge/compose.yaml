@@ -201,6 +201,9 @@ services:
       # /onboard fails with 401 unless the operator manually sets
       # LNBITS_ADMIN_KEY env after fishing the key out of LNbits' UI.
       - lnbits-data:/lnbits-data:ro
+      # Read-only mount of Phoenixd's data volume so /admin/node can
+      # auto-discover Phoenixd's HTTP API password from phoenix.conf.
+      - phoenixd-data:/phoenixd-data:ro
 
   # -------------------------------------------------------------------------
   # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.

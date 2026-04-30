@@ -221,6 +221,30 @@ th { color: var(--accent); font-weight: 600; }
 }
 .cancel-btn:hover { color: var(--fg); border-color: var(--fg); }
 
+/* Lightning node status page */
+.status-card { padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1rem 0; }
+.status-up { background: rgba(109, 182, 116, 0.12); border: 1px solid rgba(109, 182, 116, 0.5); }
+.status-down { background: rgba(217, 119, 87, 0.12); border: 1px solid rgba(217, 119, 87, 0.5); }
+.status-card h3 { margin: 0 0 0.75rem 0; }
+table.kv { width: auto; }
+table.kv th { text-align: right; color: var(--muted); padding-right: 1rem; font-weight: normal; }
+.small { font-size: 0.8rem; word-break: break-all; }
+
+.balance-grid {
+    display: grid; gap: 1rem; margin: 1rem 0;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.balance-cell {
+    background: var(--card); border-radius: 0.5rem; padding: 1rem;
+    border: 1px solid #00000044;
+}
+.balance-label { color: var(--muted); font-size: 0.85rem; }
+.balance-value { font-size: 1.5rem; color: var(--accent); margin: 0.25rem 0; }
+.balance-value small { font-size: 0.85rem; color: var(--fg); }
+.balance-note { color: var(--muted); font-size: 0.8rem; }
+
+table.channels { font-size: 0.9rem; }
+
 /* Drinks admin */
 .drink-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.5rem; align-items: end; margin-bottom: 1rem; }
 .drink-add label { margin: 0; }

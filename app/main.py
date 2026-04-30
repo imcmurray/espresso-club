@@ -28,6 +28,7 @@ from fastapi.responses import RedirectResponse
 from config import get_drinks, get_settings
 from db import Database, Drink
 from lnbits_client import LNbitsClient
+from phoenixd_client import PhoenixdClient, discover_password as discover_phoenixd_password
 from relay import make_relay
 from routers import admin, api, menu, onboard, topup
 from state import AppState
@@ -124,6 +125,19 @@ async def lifespan(app: FastAPI):
     ln = LNbitsClient(settings.lnbits_url, admin_key)
     relay = make_relay(settings.relay_driver, settings.shelly_host)
 
+    # Optional Phoenixd client for the /admin/node status page. Password is
+    # auto-discovered from the same volume mount we use for LNbits's
+    # phoenix.conf reading. If phoenixd-data isn't mounted (FakeWallet
+    # deployment) the client is created with no password and the status
+    # page will say "Phoenixd not configured."
+    phoenixd_password = discover_phoenixd_password()
+    phoenixd = PhoenixdClient(settings.phoenixd_url, phoenixd_password)
+    if phoenixd_password:
+        log.info("Phoenixd client configured (url=%s)", settings.phoenixd_url)
+    else:
+        log.info("Phoenixd password not found at /phoenixd-data/phoenix.conf — "
+                 "/admin/node will show as unconfigured")
+
     # First-boot seed: if the drinks table is empty, populate it from the
     # YAML. After that, the YAML is ignored — the admin UI is the source of
     # truth. To re-seed (e.g. blow away your edits), delete the drinks table.
@@ -137,7 +151,8 @@ async def lifespan(app: FastAPI):
         log.info("seeded %d drinks from %s", len(drinks_cfg.drinks),
                  settings.drinks_config)
 
-    state = AppState(settings=settings, drinks=drinks_cfg, db=db, ln=ln, relay=relay)
+    state = AppState(settings=settings, drinks=drinks_cfg, db=db, ln=ln,
+                      relay=relay, phoenixd=phoenixd)
     app.state.app_state = state
 
     log.info("Espresso app starting — relay=%s lnbits=%s",
@@ -146,6 +161,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await ln.aclose()
+        await phoenixd.aclose()
 
 
 app = FastAPI(title="Espresso Club", lifespan=lifespan)

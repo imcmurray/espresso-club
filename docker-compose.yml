@@ -172,6 +172,9 @@ services:
       - espresso-data:/data
       - ./app/drinks.yaml:/app/drinks.yaml:ro
       - lnbits-data:/lnbits-data:ro
+      # Phoenixd password discovery — same pattern as the lnbits-data mount
+      # we use to find the LNbits super-user adminkey.
+      - phoenixd-data:/phoenixd-data:ro
 
   # -----------------------------------------------------------------------------
   # NFC daemon — bridges PN532 reader (or simulator) to the espresso app.

@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     lnbits_url: str = "http://lnbits:5000"
     lnbits_admin_key: str = ""
 
+    phoenixd_url: str = "http://phoenixd:9740"
+
     relay_driver: str = "simulator"
     shelly_host: str = ""
     grinder_pulse_seconds: int = 30
