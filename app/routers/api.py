@@ -54,6 +54,17 @@ async def nfc_tap(event: TapEvent, request: Request):
 
     balance = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
 
+    # New / empty wallet: don't bother starting a session — there's nothing
+    # they could buy. Show a top-up prompt instead, with the CTA wired to
+    # their /topup page so they don't have to copy a URL.
+    if balance == 0:
+        await state.clear_session(
+            message=f"Hi {user.name}! Your wallet is empty. Top up to start drinking.",
+            topup_user_id=user.id,
+        )
+        log.info("tap: %s (empty wallet — showing topup CTA)", user.name)
+        return {"status": "needs_topup", "user": user.name, "user_id": user.id}
+
     # Pull any unread gifts and build a banner. Acknowledge them in the same
     # tap so they don't re-appear; the banner is held for the session
     # lifetime, then disappears with the session.
@@ -92,8 +103,8 @@ async def buy_drink(drink_id: str, request: Request):
     cost_sats = usd_to_sats(drink.price_usd)
     if session.balance_sats < cost_sats:
         await state.clear_session(
-            message=f"{user.name}: balance too low for {drink.name} (${drink.price_usd:.2f}). "
-                    f"Top up at /topup/{user.id}."
+            message=f"{user.name}: balance too low for {drink.name} (${drink.price_usd:.2f}).",
+            topup_user_id=user.id,
         )
         raise HTTPException(402, "insufficient balance")
 
@@ -171,7 +182,8 @@ async def send_gift(recipient_user_id: int, drink_id: str, request: Request):
     if session.balance_sats < cost_sats:
         await state.clear_session(
             message=f"{sender.name}: not enough to gift {drink.name} "
-                    f"(${drink.price_usd:.2f}). Top up at /topup/{sender.id}."
+                    f"(${drink.price_usd:.2f}).",
+            topup_user_id=sender.id,
         )
         raise HTTPException(402, "insufficient balance")
 

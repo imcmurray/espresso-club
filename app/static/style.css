@@ -74,10 +74,11 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     overflow: hidden;
 }
 
-/* "Join the club with this card" CTA inside the message div — appears when
-   an unknown NFC card is tapped. Tappable target, color-matched to the rest
-   of the warm theme. */
-.message .join-cta {
+/* CTA buttons that ride along inside the .message div — used for the
+   "Join the club with this card" prompt on unknown taps and the "Top up
+   now" prompt on empty/insufficient-balance wallets. Same warm-theme
+   styling as the regular drink buttons. */
+.message .message-cta {
     display: inline-block;
     margin-top: 0.6rem;
     padding: 0.5rem 1rem;
@@ -88,7 +89,7 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     border-radius: 0.4rem;
     transition: filter 0.1s;
 }
-.message .join-cta:hover { filter: brightness(1.1); color: var(--bg); }
+.message .message-cta:hover { filter: brightness(1.1); color: var(--bg); }
 
 /* Visual countdown — fills left-to-right over MESSAGE_TIMEOUT_SECONDS (30s,
    matching state.py). Once the bar reaches 100%, the next /menu/state poll

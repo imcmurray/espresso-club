@@ -61,9 +61,11 @@ class AppState:
     current: CurrentSession | None = None
     last_message: str | None = None
     last_message_expires_at: float = 0.0
-    # If set, the message div renders a "Join the club with this card" CTA
-    # alongside the message text. Cleared at the same time as last_message.
+    # CTAs that ride along with the message. Both are cleared at the same
+    # time as the message. Only one is shown at a time (join takes priority
+    # over topup if both happen to be set).
     last_message_join_card_uid: str | None = None
+    last_message_topup_user_id: int | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     SESSION_TIMEOUT_SECONDS = 30
@@ -96,11 +98,13 @@ class AppState:
             self.current.expires_at = time.time() + self.SESSION_TIMEOUT_SECONDS
 
     async def clear_session(self, message: str | None = None, *,
-                              join_card_uid: str | None = None) -> None:
+                              join_card_uid: str | None = None,
+                              topup_user_id: int | None = None) -> None:
         async with self._lock:
             self.current = None
             self.last_message = message
             self.last_message_join_card_uid = join_card_uid if message else None
+            self.last_message_topup_user_id = topup_user_id if message else None
             # Auto-expire the message after 30s so user balances and "Enjoy
             # your X!" lines don't linger on the screen after the customer
             # has walked away.
@@ -128,6 +132,14 @@ class AppState:
         if (self.last_message_join_card_uid
                 and time.time() < self.last_message_expires_at):
             return self.last_message_join_card_uid
+        return None
+
+    def topup_user_id_or_none(self) -> int | None:
+        """User ID for an attached 'Top up now' CTA on the message div, or
+        None if there's no current message or no topup target."""
+        if (self.last_message_topup_user_id
+                and time.time() < self.last_message_expires_at):
+            return self.last_message_topup_user_id
         return None
 
     # -- drinks live in the DB now; YAML is just a seed source ---------------

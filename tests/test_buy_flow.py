@@ -91,15 +91,42 @@ def test_full_flow(app):
 
 
 def test_insufficient_balance(app):
-    client, fake_ln = app
-    r = client.post("/onboard", data={"name": "Broke"}, follow_redirects=False)
-    bid = int(r.headers["location"].rsplit("/", 1)[1])
+    """User has *some* balance but not enough for the requested drink.
 
-    client.post("/api/nfc/tap", json={"uid": "CARD-BROKE"})
-    client.post("/api/nfc/tap", json={"uid": "CARD-BROKE"})  # session
+    Empty-wallet (zero-balance) users go through a different path now —
+    they're shown a top-up CTA without even getting a session. See
+    test_empty_wallet_redirects_to_topup below.
+    """
+    client, fake_ln = app
+    r = client.post("/onboard", data={"name": "ShortOnFunds"}, follow_redirects=False)
+
+    # Fund just enough to get a session but not enough for a latte ($1.10).
+    wallet = next(w for w in fake_ln.wallets.values()
+                   if "ShortOnFunds" in (w.name or ""))
+    fake_ln.fund_wallet(wallet.invoice_key, 600)  # $0.30 < $1.10
+
+    client.post("/api/nfc/tap", json={"uid": "CARD-SHORT"})  # registration
+    client.post("/api/nfc/tap", json={"uid": "CARD-SHORT"})  # session
 
     r = client.post("/api/buy/latte")
-    assert r.status_code == 402  # payment required
+    assert r.status_code == 402
+
+
+def test_empty_wallet_redirects_to_topup(app):
+    """Tapping with a zero-balance wallet yields a 'needs_topup' response
+    instead of starting a normal session. The /menu screen will show a
+    'Top up now' CTA."""
+    client, _ = app
+    client.post("/onboard", data={"name": "Penniless"}, follow_redirects=False)
+    client.post("/api/nfc/tap", json={"uid": "CARD-NIL"})  # registration
+
+    r = client.post("/api/nfc/tap", json={"uid": "CARD-NIL"})  # would-be session
+    assert r.status_code == 200
+    assert r.json()["status"] == "needs_topup"
+
+    # Without a session, /api/buy returns 409 rather than 402.
+    r = client.post("/api/buy/espresso")
+    assert r.status_code == 409
 
 
 def test_unknown_card(app):

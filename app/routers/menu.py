@@ -26,6 +26,7 @@ async def menu(request: Request):
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
             "message": state.message_or_none(),
             "join_card_uid": state.join_card_uid_or_none(),
+            "topup_user_id": state.topup_user_id_or_none(),
         },
     )
 
@@ -92,6 +93,7 @@ def _render_state(request: Request):
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
             "message": state.message_or_none(),
             "join_card_uid": state.join_card_uid_or_none(),
+            "topup_user_id": state.topup_user_id_or_none(),
             "other_users": other_users,
         },
     )
