@@ -16,6 +16,7 @@ Machine-to-machine:
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
@@ -122,7 +123,27 @@ async def lifespan(app: FastAPI):
                         "env (run scripts/lnbits-admin-url.sh on the host to "
                         "fetch the value).")
 
-    ln = LNbitsClient(settings.lnbits_url, admin_key)
+    # Optional admin username/password for admin-only LNbits endpoints (e.g.
+    # PUT /users/api/v1/user/{id} to set usernames on auto-created accounts
+    # so they show up named in the LNbits user list). Written by lnbits-init
+    # to /lnbits-data/admin.json on first boot.
+    admin_username, admin_password = None, None
+    creds_path = Path("/lnbits-data/admin.json")
+    if creds_path.exists():
+        try:
+            creds = json.loads(creds_path.read_text())
+            admin_username = creds.get("username")
+            admin_password = creds.get("password")
+            if admin_username:
+                log.info("loaded LNbits admin credentials from %s", creds_path)
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("couldn't read %s: %s", creds_path, e)
+
+    ln = LNbitsClient(
+        settings.lnbits_url, admin_key,
+        admin_username=admin_username,
+        admin_password=admin_password,
+    )
     relay = make_relay(settings.relay_driver, settings.shelly_host)
 
     # Optional Phoenixd client for the /admin/node status page. Password is
