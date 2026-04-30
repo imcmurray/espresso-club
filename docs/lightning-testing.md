@@ -276,6 +276,70 @@ To switch back to real Lightning later: re-add Phoenixd and redeploy. **Your sub
 - If you've sent a topup payment but Phoenixd shows "incoming payment failed" in its logs — paste the failure into a GitHub issue with the amount and time. Could be a peer routing issue.
 - If the channel-open fee is unexpectedly high (>5%) — check `mempool.space` for current on-chain fee rates. ACINQ's channel-open includes the on-chain transaction fee; high mempool periods are expensive. Can wait a day for fees to drop, or accept the cost.
 
+## Disaster recovery — restoring from the 12-word seed
+
+The 12-word seed is the only thing whose loss is permanent. Everything else can be rebuilt from it.
+
+### What's preserved by the seed alone
+
+- ✅ Lightning node identity (same node ID as before)
+- ✅ Funds in open channels (ACINQ recognizes you and re-syncs channel state on reconnection)
+- ✅ Ability to receive future payments as before
+
+### What you lose without separate backups
+
+- ❌ Local cache of channel state (Phoenixd asks ACINQ to re-publish; takes ~30s)
+- ❌ LNbits user accounts, sub-wallet keys, admin credentials (in `lnbits-data`)
+- ❌ Espresso-app's ledger and drinks menu (in `espresso-data`)
+
+For full operational restore, also tar-snapshot the other two volumes regularly:
+
+```bash
+# nightly cron on the Dockge host
+docker run --rm \
+  -v espresso-club_lnbits-data:/v -v /backup:/b alpine \
+  tar czf /b/lnbits-$(date +%F).tgz -C /v .
+docker run --rm \
+  -v espresso-club_espresso-data:/v -v /backup:/b alpine \
+  tar czf /b/espresso-$(date +%F).tgz -C /v .
+```
+
+### Restoring from seed (start fresh)
+
+```bash
+# 1. Stack down, volumes removed
+sudo docker compose -f /opt/stacks/espresso-club/compose.yaml down -v
+
+# 2. Helper script writes the seed into the new volume.
+#    Run from a checkout of the repo (or pipe straight from GitHub):
+curl -fsSL https://raw.githubusercontent.com/imcmurray/espresso-club/main/scripts/phoenixd-restore-seed.sh | sudo bash
+# It will prompt for the 12 words.
+
+# 3. Stack up
+sudo docker compose -f /opt/stacks/espresso-club/compose.yaml up -d
+
+# 4. Confirm the node ID matches what you had
+sudo docker logs espresso-phoenixd | grep -i nodeid
+```
+
+After ~30 seconds, channels reappear in `/admin/node` and funds are spendable again.
+
+### Restoring from a full volume backup (the cleanest path)
+
+If you have nightly tarballs:
+
+```bash
+sudo docker compose down -v
+sudo docker volume create espresso-club_phoenixd-data
+sudo docker run --rm \
+  -v espresso-club_phoenixd-data:/v -v /backup:/b alpine \
+  tar xzf /b/phoenixd-2026-04-30.tgz -C /v
+# repeat for lnbits-data and espresso-data
+sudo docker compose up -d
+```
+
+This restores everything (including channel.db state, LNbits accounts, espresso ledger) to exactly the snapshot moment. No re-sync needed.
+
 ## Appendix: the credentials file
 
 `docker exec espresso-lnbits cat /data/admin.json` returns:
