@@ -102,24 +102,37 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
 }
 .message .message-cta:hover { filter: brightness(1.1); }
 
-/* Visual countdown — fills left-to-right over MESSAGE_TIMEOUT_SECONDS (30s,
-   matching state.py). Once the bar reaches 100%, the next /menu/state poll
-   from the server will return no message and the whole .message element
-   disappears. Animation runs once on mount; HTMX morph preserves the element
-   across polls so the animation continues uninterrupted. */
-.message .timer-bar {
+/* Visual countdown — fills left-to-right over 30s (matching SESSION_TIMEOUT
+   and MESSAGE_TIMEOUT in state.py). Once the bar reaches 100%, the next
+   /menu/state poll from the server will return None for the relevant state
+   and the whole containing element disappears. Animation runs once on
+   mount; HTMX morph preserves the element across polls so the animation
+   continues uninterrupted.
+
+   Drop the bar inside any element that has position:relative + overflow
+   hidden, e.g. .message or .session-timer-wrap. */
+.timer-bar {
     position: absolute;
     left: 0;
     bottom: 0;
     height: 3px;
     width: 0;
     background: var(--accent);
-    border-bottom-left-radius: 0.5rem;
     animation: timer-bar-fill 30s linear forwards;
 }
 @keyframes timer-bar-fill {
     from { width: 0; }
     to   { width: 100%; }
+}
+/* The .message variant gets a rounded bottom-left corner because the parent
+   has rounded corners; the session variant doesn't. */
+.message .timer-bar { border-bottom-left-radius: 0.5rem; }
+
+.session-timer-wrap {
+    position: relative;
+    overflow: hidden;
+    margin-top: 1rem;
+    padding-bottom: 0.6rem;
 }
 .hint { color: var(--muted); margin-top: 1rem; }
 
