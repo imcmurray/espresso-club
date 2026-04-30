@@ -8,16 +8,27 @@
     </p>
 
     <h2>Members</h2>
-    <table>
+    <table class="members-table">
         <thead>
-            <tr><th>#</th><th>Name</th><th>NFC</th><th>Balance</th><th></th></tr>
+            <tr><th>#</th><th>Name</th><th>NFC card</th><th>Balance</th><th></th></tr>
         </thead>
         <tbody>
             {% for u in users %}
             <tr>
                 <td>{{ u.id }}</td>
                 <td>{{ u.name }}</td>
-                <td>{{ u.nfc_uid or "(unregistered)" }}</td>
+                <td class="nfc-cell">
+                    {% if u.nfc_uid %}
+                    <code class="small">{{ u.nfc_uid }}</code>
+                    {% else %}
+                    <span class="muted">unregistered</span>
+                    {% endif %}
+                    <form action="/admin/users/{{ u.id }}/assign-nfc" method="post" class="nfc-form">
+                        <input name="nfc_uid" placeholder="{% if u.nfc_uid %}replace{% else %}set{% endif %} card UID"
+                               size="20" required>
+                        <button type="submit">Save</button>
+                    </form>
+                </td>
                 <td>{% if u.balance_usd is not none %}${{ "%.2f"|format(u.balance_usd) }}{% else %}?{% endif %}</td>
                 <td><a href="/topup/{{ u.id }}">Top up</a></td>
             </tr>

@@ -221,6 +221,21 @@ th { color: var(--accent); font-weight: 600; }
 }
 .cancel-btn:hover { color: var(--fg); border-color: var(--fg); }
 
+/* NFC assignment form on /admin */
+.nfc-cell { vertical-align: top; }
+.nfc-cell .muted { color: var(--muted); font-style: italic; }
+.nfc-form {
+    display: flex; gap: 0.25rem; margin-top: 0.35rem;
+}
+.nfc-form input {
+    padding: 0.25rem 0.5rem; font-size: 0.85rem;
+    background: var(--bg); color: var(--fg);
+    border: 1px solid var(--muted); border-radius: 0.25rem;
+}
+.nfc-form button {
+    padding: 0.25rem 0.65rem; font-size: 0.85rem;
+}
+
 /* Lightning node status page */
 .status-card { padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1rem 0; }
 .status-up { background: rgba(109, 182, 116, 0.12); border: 1px solid rgba(109, 182, 116, 0.5); }

@@ -6,7 +6,7 @@ import re
 import time
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
@@ -91,7 +91,10 @@ async def drinks_update(
     price_usd: float = Form(...),
     description: str = Form(""),
     sort_order: int = Form(...),
-    active: str = Form("on"),
+    # Unchecked HTML checkboxes don't submit at all, so the absence of a
+    # value means active=False. (If we used Form("on") as default, an
+    # unchecked checkbox would silently leave the drink active.)
+    active: str | None = Form(None),
 ):
     state = request.app.state.app_state
     if not state.db.get_drink(drink_id):
@@ -101,7 +104,8 @@ async def drinks_update(
         name=name.strip(), emoji=emoji.strip(),
         price_usd=float(price_usd), description=description.strip(),
         sort_order=int(sort_order),
-        active=(active.lower() in ("on", "true", "1", "yes")),
+        active=(active is not None
+                and active.lower() in ("on", "true", "1", "yes")),
     )
     return templates.TemplateResponse(
         request, "_drink_row.html", {"d": d, "swap_oob": None},
@@ -119,6 +123,40 @@ async def drinks_delete(request: Request, drink_id: str):
     return templates.TemplateResponse(
         request, "_drink_row.html", {"d": d, "swap_oob": None},
     )
+
+
+# -- assign / re-assign NFC card to a user ---------------------------------
+
+@router.post("/admin/users/{user_id}/assign-nfc")
+async def admin_assign_nfc(
+    user_id: int,
+    request: Request,
+    nfc_uid: str = Form(...),
+):
+    """Operator manually sets (or replaces) a user's NFC card UID.
+
+    Useful when:
+    - A user was created via /onboard but never tapped a card within the
+      30-second registration window.
+    - A staff member's existing card is lost / damaged and gets replaced.
+    """
+    state = request.app.state.app_state
+    user = state.db.get_user(user_id)
+    if not user:
+        raise HTTPException(404, "no such user")
+
+    nfc_uid = nfc_uid.strip()
+    if not nfc_uid:
+        raise HTTPException(400, "nfc_uid required")
+
+    existing = state.db.get_user_by_nfc(nfc_uid)
+    if existing and existing.id != user_id:
+        raise HTTPException(
+            409, f"card '{nfc_uid}' is already assigned to {existing.name}"
+        )
+
+    state.db.assign_nfc(user_id, nfc_uid)
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 # -- Phoenixd / Lightning node status --------------------------------------
