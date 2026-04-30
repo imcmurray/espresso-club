@@ -102,8 +102,16 @@ class LNbitsClient:
         )
 
     async def is_invoice_paid(self, *, invoice_key: str, payment_hash: str) -> bool:
-        data = await self._request("GET", f"/api/v1/payments/{payment_hash}",
-                                    key=invoice_key)
+        # LNbits v1.5.x returns 404 "Payment does not exist" for invoices
+        # that haven't been paid yet (older versions returned {"paid": false}).
+        # Treat 404 as "not paid yet" — anything else is a real error.
+        try:
+            data = await self._request("GET", f"/api/v1/payments/{payment_hash}",
+                                        key=invoice_key)
+        except LNbitsError as e:
+            if " 404:" in str(e):
+                return False
+            raise
         return bool(data.get("paid"))
 
     async def pay_invoice(self, *, admin_key: str, bolt11: str) -> dict:

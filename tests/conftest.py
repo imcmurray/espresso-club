@@ -36,6 +36,9 @@ class FakeLNbits:
         self.wallets: dict[str, FakeWallet] = {}
         self.invoices: dict[str, tuple[str, int]] = {}  # hash -> (invoice_key, sats)
         self._next_id = 1
+        # Mirrors LNbitsClient.admin_key — the operator wallet's adminkey,
+        # used as the treasury "destination" by the buy_drink flow.
+        self.admin_key: str = "adm-treasury"
 
     async def aclose(self):
         pass

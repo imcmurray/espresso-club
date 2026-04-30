@@ -94,12 +94,18 @@ async def buy_drink(drink_id: str, request: Request):
         )
         raise HTTPException(402, "insufficient balance")
 
-    # Sink wallet: the operator's main LNbits wallet is the recipient. We
-    # identify it by LNBITS_ADMIN_KEY in settings — this is the wallet you
-    # logged into LNbits with first; its invoice key resolves at the LNbits
-    # /api/v1/wallet endpoint. For simplicity we burn sats by paying the same
-    # admin wallet in dev mode.
-    treasury_key = state.settings.lnbits_admin_key
+    # Sink wallet: the operator's main LNbits wallet (the super-user's wallet,
+    # auto-discovered or set via LNBITS_ADMIN_KEY env). state.ln.admin_key is
+    # whatever the lifespan settled on after the auto-bootstrap, so it works
+    # whether the operator set the env explicitly or relied on discovery.
+    # LNbits accepts the admin key in place of an invoice key for inbound
+    # invoice creation.
+    treasury_key = state.ln.admin_key
+    if not treasury_key:
+        await state.clear_session(
+            message="Operator wallet key not configured — see espresso-app logs"
+        )
+        raise HTTPException(500, "no treasury_key available")
     await state.ln.transfer_internal(
         source_admin_key=user.lnbits_admin_key,
         dest_invoice_key=treasury_key,
