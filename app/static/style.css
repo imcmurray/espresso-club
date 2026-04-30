@@ -193,6 +193,11 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     50%      { opacity: 1; }
 }
 
+.onboard-form-card {
+    position: relative;
+    overflow: hidden;
+    padding-bottom: 0.6rem;
+}
 .onboard-form-card .card-detected {
     background: rgba(109, 182, 116, 0.18);
     border: 1px solid rgba(109, 182, 116, 0.5);
@@ -209,6 +214,11 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     text-align: center;
     font-weight: 700;
     margin-right: 0.4rem;
+}
+.onboard-form-card .hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 1rem 0 0.3rem 0;
 }
 
 .admin { max-width: 1100px; }

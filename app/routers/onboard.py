@@ -21,17 +21,17 @@ templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent
 async def onboard_form(request: Request, card: str | None = None):
     """Show the onboarding page.
 
-    Three sources for the NFC card UID, in priority order:
-      1. ?card=<uid> query param (the "Join with this card" link from /menu)
-      2. A recently-tapped unknown card stored in app state
-      3. None — show a "tap a card to continue" gate that polls until one
-         arrives, then unlocks the form.
-
-    Account creation is gated on (1) or (2) — we never create an account
-    without a real card UID. The polling gate handles (3).
+    The form is gated on a *fresh* unknown tap stored in app state
+    (UNKNOWN_TAP_WINDOW_SECONDS, currently 30s). The ?card=<uid> query
+    param from the "Join with this card" menu link is intentionally
+    NOT a fallback — if the link is stale (user came back to it hours
+    later), recent_unknown_tap() returns None and the page shows the
+    "tap a card to continue" gate instead. Forces a fresh tap rather
+    than letting them link a card they once held to a brand-new
+    account.
     """
     state = request.app.state.app_state
-    card_uid = (card or "").strip() or state.recent_unknown_tap()
+    card_uid = state.recent_unknown_tap()
     return templates.TemplateResponse(
         request, "onboard.html",
         {"prefilled_card_uid": card_uid},
@@ -40,16 +40,23 @@ async def onboard_form(request: Request, card: str | None = None):
 
 @router.get("/onboard/poll", response_class=HTMLResponse)
 async def onboard_poll(request: Request):
-    """HTMX poll target — returns the form fragment as soon as the user
-    taps a card on the reader. Returns an empty body with HX-Reswap: none
-    while we're still waiting, so the gate stays in place."""
+    """HTMX poll target. Returns whichever fragment matches the current
+    freshness state:
+
+    - Fresh unknown tap → form fragment (idempotent re-render; morph keeps
+      the form mounted and preserves any input value the user has typed).
+    - No fresh tap → waiting fragment, swapping the form back out so the
+      operator can't submit a stale UID.
+    """
     state = request.app.state.app_state
     card_uid = state.recent_unknown_tap()
-    if not card_uid:
-        return HTMLResponse("", headers={"HX-Reswap": "none"})
+    if card_uid:
+        return templates.TemplateResponse(
+            request, "_onboard_form.html",
+            {"prefilled_card_uid": card_uid},
+        )
     return templates.TemplateResponse(
-        request, "_onboard_form.html",
-        {"prefilled_card_uid": card_uid},
+        request, "_onboard_waiting.html", {},
     )
 
 

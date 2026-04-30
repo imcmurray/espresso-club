@@ -76,7 +76,7 @@ class AppState:
 
     SESSION_TIMEOUT_SECONDS = 30
     MESSAGE_TIMEOUT_SECONDS = 30
-    UNKNOWN_TAP_WINDOW_SECONDS = 60
+    UNKNOWN_TAP_WINDOW_SECONDS = 30
 
     async def set_session(self, user_id: int, user_name: str,
                            balance_sats: int,

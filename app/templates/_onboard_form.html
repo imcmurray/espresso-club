@@ -1,4 +1,9 @@
-<div class="onboard-form-card">
+<div class="onboard-form-card"
+     hx-get="/onboard/poll"
+     hx-trigger="every 2s"
+     hx-target="#onboard-state"
+     hx-swap="morph:innerHTML"
+     hx-ext="morph">
     <p class="card-detected">
         <span class="card-icon-small">✓</span>
         Card detected: <code>{{ prefilled_card_uid }}</code>
@@ -12,4 +17,9 @@
         </label>
         <button type="submit">Create my account →</button>
     </form>
+    <p class="hint">
+        You have 30 seconds to enter your name before the card detection
+        expires. If you don't make it, just tap your card again.
+    </p>
+    <div class="timer-bar"></div>
 </div>
