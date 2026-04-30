@@ -74,6 +74,22 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     overflow: hidden;
 }
 
+/* "Join the club with this card" CTA inside the message div — appears when
+   an unknown NFC card is tapped. Tappable target, color-matched to the rest
+   of the warm theme. */
+.message .join-cta {
+    display: inline-block;
+    margin-top: 0.6rem;
+    padding: 0.5rem 1rem;
+    background: var(--accent);
+    color: var(--bg);
+    text-decoration: none;
+    font-weight: 600;
+    border-radius: 0.4rem;
+    transition: filter 0.1s;
+}
+.message .join-cta:hover { filter: brightness(1.1); color: var(--bg); }
+
 /* Visual countdown — fills left-to-right over MESSAGE_TIMEOUT_SECONDS (30s,
    matching state.py). Once the bar reaches 100%, the next /menu/state poll
    from the server will return no message and the whole .message element

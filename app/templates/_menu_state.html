@@ -50,6 +50,11 @@
         {% if message %}
         <div class="message">
             {{ message }}
+            {% if join_card_uid %}
+            <a class="join-cta" href="/onboard?card={{ join_card_uid|urlencode }}">
+                Join the club with this card →
+            </a>
+            {% endif %}
             <div class="timer-bar"></div>
         </div>
         {% endif %}

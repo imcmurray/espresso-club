@@ -61,6 +61,9 @@ class AppState:
     current: CurrentSession | None = None
     last_message: str | None = None
     last_message_expires_at: float = 0.0
+    # If set, the message div renders a "Join the club with this card" CTA
+    # alongside the message text. Cleared at the same time as last_message.
+    last_message_join_card_uid: str | None = None
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     SESSION_TIMEOUT_SECONDS = 30
@@ -92,10 +95,12 @@ class AppState:
             # mid-flow.
             self.current.expires_at = time.time() + self.SESSION_TIMEOUT_SECONDS
 
-    async def clear_session(self, message: str | None = None) -> None:
+    async def clear_session(self, message: str | None = None, *,
+                              join_card_uid: str | None = None) -> None:
         async with self._lock:
             self.current = None
             self.last_message = message
+            self.last_message_join_card_uid = join_card_uid if message else None
             # Auto-expire the message after 30s so user balances and "Enjoy
             # your X!" lines don't linger on the screen after the customer
             # has walked away.
@@ -114,6 +119,15 @@ class AppState:
         fragment, so once it ages out it just disappears on the next poll."""
         if self.last_message and time.time() < self.last_message_expires_at:
             return self.last_message
+        return None
+
+    def join_card_uid_or_none(self) -> str | None:
+        """If the most recent message has an associated card-UID for the
+        'Join with this card' CTA, return it (subject to the same expiry
+        as the message itself)."""
+        if (self.last_message_join_card_uid
+                and time.time() < self.last_message_expires_at):
+            return self.last_message_join_card_uid
         return None
 
     # -- drinks live in the DB now; YAML is just a seed source ---------------

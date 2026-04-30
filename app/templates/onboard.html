@@ -3,8 +3,21 @@
 {% block content %}
 <section class="onboard">
     <h2>Join the Espresso Club</h2>
-    <p>Enter your name. After submitting, tap your NFC card on the reader within 30 seconds to link it.</p>
+    {% if prefilled_card_uid %}
+    <p>
+        Linking card <code>{{ prefilled_card_uid }}</code> to your new account.
+        Just enter your name and we'll do the rest.
+    </p>
+    {% else %}
+    <p>
+        Enter your name. After submitting, tap your NFC card on the reader within
+        30 seconds to link it.
+    </p>
+    {% endif %}
     <form method="post" action="/onboard">
+        {% if prefilled_card_uid %}
+        <input type="hidden" name="nfc_uid" value="{{ prefilled_card_uid }}">
+        {% endif %}
         <label>
             Your name
             <input type="text" name="name" required autofocus
