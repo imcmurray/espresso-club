@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +23,31 @@ _SLUG_RE = re.compile(r"[^a-z0-9_]+")
 
 def _slugify(name: str) -> str:
     return _SLUG_RE.sub("_", name.lower()).strip("_") or "drink"
+
+
+def fmt_ts(ts: int) -> str:
+    """Friendly timestamp for ledger displays.
+
+    < 1 minute  → "just now"
+    < 1 hour    → "12 min ago"
+    < 24 hours  → "3 hr ago"
+    < 7 days    → "2 days ago"
+    older       → absolute UTC date+time
+    """
+    if not ts:
+        return "—"
+    delta = time.time() - int(ts)
+    if delta < 60:
+        return "just now"
+    if delta < 3600:
+        return f"{int(delta / 60)} min ago"
+    if delta < 86400:
+        return f"{int(delta / 3600)} hr ago"
+    if delta < 7 * 86400:
+        return f"{int(delta / 86400)} days ago"
+    return datetime.fromtimestamp(int(ts), timezone.utc).strftime(
+        "%Y-%m-%d %H:%M UTC"
+    )
 
 
 # -- drinks CRUD ------------------------------------------------------------
@@ -220,5 +246,6 @@ async def admin_dashboard(request: Request):
             "recent": recent,
             "leaderboard": leaderboard,
             "sats_to_usd": sats_to_usd,
+            "fmt_ts": fmt_ts,
         },
     )

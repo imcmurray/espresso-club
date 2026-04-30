@@ -72,7 +72,8 @@ async def topup_invoice(request: Request, user_id: int, amount_usd: float):
 
 
 @router.get("/topup/{user_id}/check/{payment_hash}", response_class=HTMLResponse)
-async def topup_check(request: Request, user_id: int, payment_hash: str):
+async def topup_check(request: Request, user_id: int, payment_hash: str,
+                       amount_usd: float = 0.0):
     """HTMX poll target — returns 'paid' fragment when the invoice settles.
 
     While the invoice is unpaid, return an empty body with HX-Reswap: none.
@@ -80,6 +81,10 @@ async def topup_check(request: Request, user_id: int, payment_hash: str):
     QR card stays mounted and the user can keep scanning. The hx-trigger on
     the card ('every 2s') is preserved, so polling continues. Only once the
     invoice is paid do we return real content that replaces the card.
+
+    `amount_usd` is the original topup amount, passed as a query param by
+    the polling fragment (the topup endpoint knows it; the check endpoint
+    otherwise wouldn't). Used to record an accurate ledger entry.
     """
     state = request.app.state.app_state
     user = state.db.get_user(user_id)
@@ -95,7 +100,8 @@ async def topup_check(request: Request, user_id: int, payment_hash: str):
     balance_sats = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
     state.db.record(
         user_id=user.id, kind="topup",
-        amount_sats=0, amount_usd=0.0,  # the invoice metadata has the real amount
+        amount_sats=usd_to_sats(amount_usd),
+        amount_usd=float(amount_usd),
         balance_after_sats=balance_sats,
         meta={"payment_hash": payment_hash},
     )

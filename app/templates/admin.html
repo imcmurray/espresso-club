@@ -53,7 +53,7 @@
         <tbody>
             {% for entry, name in recent %}
             <tr>
-                <td>{{ entry.timestamp }}</td>
+                <td title="{{ entry.timestamp }}">{{ fmt_ts(entry.timestamp) }}</td>
                 <td>{{ name }}</td>
                 <td>{{ entry.kind }}{% if entry.drink_id %} · {{ entry.drink_id }}{% endif %}</td>
                 <td>${{ "%.2f"|format(entry.amount_usd) }}</td>

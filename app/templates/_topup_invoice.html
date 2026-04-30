@@ -1,5 +1,5 @@
 <div class="invoice-card"
-     hx-get="/topup/{{ user.id }}/check/{{ payment_hash }}"
+     hx-get="/topup/{{ user.id }}/check/{{ payment_hash }}?amount_usd={{ amount_usd }}"
      hx-trigger="every 2s"
      hx-target="#invoice"
      hx-swap="innerHTML">
