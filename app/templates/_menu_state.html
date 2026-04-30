@@ -48,7 +48,10 @@
         <div class="big-emoji">☕</div>
         <div class="prompt">Tap your card to begin</div>
         {% if message %}
-        <div class="message">{{ message }}</div>
+        <div class="message">
+            {{ message }}
+            <div class="timer-bar"></div>
+        </div>
         {% endif %}
         <div class="hint">First time? <a href="/onboard">Join the club</a></div>
     </div>

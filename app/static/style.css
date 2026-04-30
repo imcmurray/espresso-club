@@ -70,6 +70,28 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     margin: 1rem auto;
     max-width: 30rem;
     border-radius: 0.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Visual countdown — fills left-to-right over MESSAGE_TIMEOUT_SECONDS (30s,
+   matching state.py). Once the bar reaches 100%, the next /menu/state poll
+   from the server will return no message and the whole .message element
+   disappears. Animation runs once on mount; HTMX morph preserves the element
+   across polls so the animation continues uninterrupted. */
+.message .timer-bar {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    width: 0;
+    background: var(--accent);
+    border-bottom-left-radius: 0.5rem;
+    animation: timer-bar-fill 30s linear forwards;
+}
+@keyframes timer-bar-fill {
+    from { width: 0; }
+    to   { width: 100%; }
 }
 .hint { color: var(--muted); margin-top: 1rem; }
 
