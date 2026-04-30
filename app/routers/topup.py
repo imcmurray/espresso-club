@@ -105,8 +105,13 @@ async def topup_check(request: Request, user_id: int, payment_hash: str,
         balance_after_sats=balance_sats,
         meta={"payment_hash": payment_hash},
     )
+    # First-time topup → show the welcome explainer alongside the success
+    # message. After this one, the user has at least one topup row and we
+    # skip the welcome.
+    is_first_topup = state.db.count_ledger_entries_for(user.id, "topup") == 1
     return templates.TemplateResponse(
         request,
         "_topup_paid.html",
-        {"user": user, "balance_usd": sats_to_usd(balance_sats)},
+        {"user": user, "balance_usd": sats_to_usd(balance_sats),
+         "is_first_topup": is_first_topup},
     )

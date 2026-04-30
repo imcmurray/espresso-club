@@ -257,6 +257,35 @@ button:hover { filter: brightness(1.1); }
     text-align: center;
 }
 .invoice-card.paid { border: 2px solid var(--good); }
+.invoice-card .invoice-meta {
+    color: var(--muted); font-size: 0.8rem; margin: 0.6rem 0 0 0;
+}
+
+/* First-time topup welcome callout — explains the basics in one screen so
+   new users know what to do next. */
+.welcome-callout {
+    background: rgba(192, 133, 82, 0.10);
+    border: 1px solid rgba(192, 133, 82, 0.4);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    text-align: left;
+}
+.welcome-callout h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--accent);
+}
+.welcome-callout ul {
+    margin: 0.5rem 0 0 0;
+    padding-left: 1.25rem;
+}
+.welcome-callout li { margin: 0.4rem 0; }
+.welcome-callout code {
+    background: var(--card);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.2rem;
+    font-size: 0.85em;
+}
 .qr { max-width: 280px; image-rendering: pixelated; }
 .invoice-card textarea {
     width: 100%; height: 5rem;

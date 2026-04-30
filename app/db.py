@@ -380,6 +380,16 @@ class Database:
 
     # -- analytics -----------------------------------------------------------
 
+    def count_ledger_entries_for(self, user_id: int, kind: str) -> int:
+        """Count ledger rows of a given kind for a single user.
+        Used by the topup flow to detect first-time vs returning users."""
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM ledger WHERE user_id = ? AND kind = ?",
+                (user_id, kind),
+            ).fetchone()
+            return int(row["n"])
+
     def leaderboard(self, since_ts: int) -> list[tuple[str, int, int]]:
         """Top spenders since `since_ts`. Returns (name, drinks, sats_spent)."""
         with self.connect() as conn:

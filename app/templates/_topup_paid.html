@@ -1,5 +1,19 @@
 <div class="invoice-card paid">
     <h3>✅ Paid!</h3>
     <p>{{ user.name }}'s new balance: <strong>${{ "%.2f"|format(balance_usd) }}</strong></p>
+
+    {% if is_first_topup %}
+    <div class="welcome-callout">
+        <h4>👋 Welcome to the Espresso Club!</h4>
+        <p>Here's how it works:</p>
+        <ul>
+            <li><strong>Tap your card</strong> on the reader, pick a drink — your balance debits automatically.</li>
+            <li><strong>Gift a coffee</strong> to a teammate any time via the 🎁 button on the menu.</li>
+            <li><strong>Top up again</strong> any time by visiting <code>/topup/{{ user.id }}</code> — bookmark it.</li>
+            <li><strong>Lost a card?</strong> Talk to the operator — they'll re-link a new one to your wallet so your balance survives.</li>
+        </ul>
+    </div>
+    {% endif %}
+
     <p><a href="/menu">→ Tap your card and grab a drink</a></p>
 </div>

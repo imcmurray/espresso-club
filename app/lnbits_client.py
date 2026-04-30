@@ -174,8 +174,16 @@ class LNbitsClient:
         return int(data["balance"]) // 1000  # msat -> sat
 
     async def create_invoice(self, *, invoice_key: str, amount_sats: int,
-                              memo: str = "") -> Invoice:
-        body = {"out": False, "amount": amount_sats, "memo": memo}
+                              memo: str = "",
+                              expiry: int = 3600) -> Invoice:
+        """Create a Lightning invoice that expires after `expiry` seconds.
+
+        Default 1 hour — long enough that someone can walk to their desk,
+        open their Lightning wallet, and scan the QR without rush, but short
+        enough that an abandoned QR won't sit around as a payment trap.
+        """
+        body = {"out": False, "amount": amount_sats, "memo": memo,
+                "expiry": expiry}
         data = await self._request("POST", "/api/v1/payments", key=invoice_key, json=body)
         return Invoice(
             payment_hash=data["payment_hash"],
