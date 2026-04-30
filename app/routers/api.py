@@ -53,6 +53,10 @@ async def nfc_tap(event: TapEvent, request: Request):
         )
         return {"status": "unknown", "uid": event.uid}
 
+    # Stash the known tap too so /onboard's waiting view can warn anyone
+    # trying to register the card that it's already taken.
+    await state.record_known_tap(event.uid, user.name)
+
     balance = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
 
     # New / empty wallet: don't bother starting a session — there's nothing

@@ -54,19 +54,31 @@ async def onboard_poll_from_form(request: Request):
 
 @router.get("/onboard/poll/waiting", response_class=HTMLResponse)
 async def onboard_poll_from_waiting(request: Request):
-    """Polled by the waiting view. Returns:
-      - HX-Reswap: none while no card has been tapped (waiting view stays).
-      - The form fragment as soon as an unknown card hits the reader,
-        swapping the waiting view out so the user can finish onboarding.
+    """Polled by the waiting view. Three terminal states:
+
+      - Fresh unknown tap → form fragment (the new card can be registered).
+      - Fresh known tap   → "card already in use" fragment (tells the user
+        to try a different card).
+      - Otherwise         → HX-Reswap: none, waiting view stays mounted.
+
+    The known-vs-unknown precedence is handled in state.recent_known_tap:
+    if both are fresh, the more recent one wins, with unknown winning ties.
     """
     state = request.app.state.app_state
     card_uid = state.recent_unknown_tap()
-    if not card_uid:
-        return HTMLResponse("", headers={"HX-Reswap": "none"})
-    return templates.TemplateResponse(
-        request, "_onboard_form.html",
-        {"prefilled_card_uid": card_uid},
-    )
+    if card_uid:
+        return templates.TemplateResponse(
+            request, "_onboard_form.html",
+            {"prefilled_card_uid": card_uid},
+        )
+    known = state.recent_known_tap()
+    if known:
+        uid, user_name = known
+        return templates.TemplateResponse(
+            request, "_onboard_card_in_use.html",
+            {"uid": uid, "user_name": user_name},
+        )
+    return HTMLResponse("", headers={"HX-Reswap": "none"})
 
 
 @router.post("/onboard")

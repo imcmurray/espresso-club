@@ -71,7 +71,14 @@ class AppState:
     # whichever comes first. The /onboard page polls this to know when to
     # unlock its form.
     last_unknown_tap_uid: str | None = None
-    last_unknown_tap_at: float = 0.0
+    last_unknown_tap_at: float = 0.0  # raw timestamp of the tap
+    # Most-recently tapped UID that DID match a registered user. Used by
+    # the /onboard waiting view to surface a "card already in use"
+    # message if someone taps a registered card while trying to register
+    # a new one.
+    last_known_tap_uid: str | None = None
+    last_known_tap_user_name: str | None = None
+    last_known_tap_at: float = 0.0  # raw timestamp of the tap
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     SESSION_TIMEOUT_SECONDS = 30
@@ -155,21 +162,47 @@ class AppState:
         plausibly take a person to walk to the kiosk and visit /onboard."""
         async with self._lock:
             self.last_unknown_tap_uid = uid
-            self.last_unknown_tap_at = (
-                time.time() + self.UNKNOWN_TAP_WINDOW_SECONDS
-            )
+            self.last_unknown_tap_at = time.time()
+
+    async def record_known_tap(self, uid: str, user_name: str) -> None:
+        """Stash a known-card UID so the /onboard page can warn that the
+        card is already in use if it's tapped while waiting."""
+        async with self._lock:
+            self.last_known_tap_uid = uid
+            self.last_known_tap_user_name = user_name
+            self.last_known_tap_at = time.time()
 
     def recent_unknown_tap(self) -> str | None:
         """Return the most-recently-stashed unknown UID if it's still in
         the watch window, else None."""
         if (self.last_unknown_tap_uid
-                and time.time() < self.last_unknown_tap_at):
+                and time.time() - self.last_unknown_tap_at
+                < self.UNKNOWN_TAP_WINDOW_SECONDS):
             return self.last_unknown_tap_uid
         return None
 
+    def recent_known_tap(self) -> tuple[str, str] | None:
+        """If a registered card was tapped within the watch window AND
+        more recently than any unknown tap, return (uid, user_name).
+        Used to render the "card already in use" message on /onboard
+        without overriding a fresh unknown tap that should drive the
+        form."""
+        if not self.last_known_tap_uid:
+            return None
+        if (time.time() - self.last_known_tap_at
+                >= self.UNKNOWN_TAP_WINDOW_SECONDS):
+            return None
+        # If an unknown tap is also fresh AND more recent, defer to it —
+        # the user is in the middle of onboarding a new card and we
+        # shouldn't override it with stale "in use" info.
+        if (self.last_unknown_tap_uid
+                and self.last_unknown_tap_at > self.last_known_tap_at):
+            return None
+        return self.last_known_tap_uid, self.last_known_tap_user_name
+
     async def consume_unknown_tap(self) -> None:
-        """Clear the stashed UID after a successful onboard so it doesn't
-        keep nudging the form."""
+        """Clear the stashed unknown UID after a successful onboard so
+        it doesn't keep nudging the form."""
         async with self._lock:
             self.last_unknown_tap_uid = None
             self.last_unknown_tap_at = 0.0

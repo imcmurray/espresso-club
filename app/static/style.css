@@ -172,6 +172,28 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     margin: 0 auto;
 }
 
+/* "Card already in use" view on /onboard — shown if someone taps a card
+   that's already registered while waiting to onboard a new one. Same
+   polling lifecycle as the regular waiting view: the moment a different
+   (unknown) card is tapped it swaps to the form. */
+.onboard-in-use {
+    text-align: center;
+    padding: 1.5rem 0.5rem;
+}
+.onboard-in-use .card-icon-warn {
+    font-size: 4rem;
+    margin-bottom: 0.5rem;
+}
+.onboard-in-use h3 {
+    margin: 0.5rem 0;
+    color: var(--bad);
+}
+.onboard-in-use .hint {
+    color: var(--muted);
+    max-width: 420px;
+    margin: 0.5rem auto;
+}
+
 /* "Tap a new card to continue" gate on /onboard. */
 .onboard-waiting { text-align: center; padding: 1.5rem 0.5rem; }
 .onboard-waiting .card-icon {
