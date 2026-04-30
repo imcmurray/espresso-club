@@ -77,8 +77,19 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
 /* CTA buttons that ride along inside the .message div — used for the
    "Join the club with this card" prompt on unknown taps and the "Top up
    now" prompt on empty/insufficient-balance wallets. Same warm-theme
-   styling as the regular drink buttons. */
-.message .message-cta {
+   styling as the regular drink buttons.
+
+   Explicit :link/:visited/:hover/:active overrides because the generic
+   `main a:visited { color: var(--accent) }` rule earlier in this file
+   has the same specificity as `.message .message-cta:visited`, but
+   without explicitly stating each pseudo-class here the visited state
+   would render the button text in the same accent color as the button
+   background — invisible until hover. */
+.message .message-cta,
+.message .message-cta:link,
+.message .message-cta:visited,
+.message .message-cta:hover,
+.message .message-cta:active {
     display: inline-block;
     margin-top: 0.6rem;
     padding: 0.5rem 1rem;
@@ -89,7 +100,7 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     border-radius: 0.4rem;
     transition: filter 0.1s;
 }
-.message .message-cta:hover { filter: brightness(1.1); color: var(--bg); }
+.message .message-cta:hover { filter: brightness(1.1); }
 
 /* Visual countdown — fills left-to-right over MESSAGE_TIMEOUT_SECONDS (30s,
    matching state.py). Once the bar reaches 100%, the next /menu/state poll
