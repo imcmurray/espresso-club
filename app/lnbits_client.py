@@ -167,22 +167,6 @@ class LNbitsClient:
         except httpx.HTTPError as e:
             log.warning("set_username request error: %s", e)
 
-
-def _slugify_for_lnbits(name: str) -> str:
-    """Produce a username matching LNbits's ^[a-zA-Z0-9._]{2,20}$ regex.
-
-    "Ian Test 1"     -> "Ian_Test_1_a3f4"
-    "Sarah O'Brien"  -> "Sarah_OBrien_a3f4"
-    "🥺 weird"       -> "weird_a3f4" (emoji stripped)
-    "" or non-ASCII  -> "user_a3f4"
-    """
-    base = re.sub(r"[^a-zA-Z0-9]+", "_", name or "")
-    base = base.strip("_.")[:14]
-    if not base:
-        base = "user"
-    suffix = secrets.token_hex(2)  # 4 chars
-    return f"{base}_{suffix}"
-
     # -- wallet balance / invoices / payments --------------------------------
 
     async def wallet_balance_sats(self, *, invoice_key: str) -> int:
@@ -240,3 +224,19 @@ def _slugify_for_lnbits(name: str) -> str:
             return r.status_code == 200
         except httpx.HTTPError:
             return False
+
+
+def _slugify_for_lnbits(name: str) -> str:
+    """Produce a username matching LNbits's ^[a-zA-Z0-9._]{2,20}$ regex.
+
+    "Ian Test 1"     -> "Ian_Test_1_a3f4"
+    "Sarah O'Brien"  -> "Sarah_OBrien_a3f4"
+    "🥺 weird"       -> "weird_a3f4" (emoji stripped)
+    "" or non-ASCII  -> "user_a3f4"
+    """
+    base = re.sub(r"[^a-zA-Z0-9]+", "_", name or "")
+    base = base.strip("_.")[:14]
+    if not base:
+        base = "user"
+    suffix = secrets.token_hex(2)  # 4 chars
+    return f"{base}_{suffix}"
