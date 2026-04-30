@@ -33,12 +33,17 @@
                 {% endfor %}
             </div>
 
-            <button class="gift-btn"
-                    hx-post="/menu/gift/start"
-                    hx-target="#screen"
-                    hx-swap="morph:innerHTML">
-                🎁 Gift a drink to a teammate
-            </button>
+            <div class="session-actions">
+                <button class="gift-btn"
+                        hx-post="/menu/gift/start"
+                        hx-target="#screen"
+                        hx-swap="morph:innerHTML">
+                    🎁 Gift a drink to a teammate
+                </button>
+                <a class="topup-btn" href="/topup/{{ session.user_id }}">
+                    💰 Top up your balance
+                </a>
+            </div>
 
             <div class="session-timer-wrap">
                 <div class="hint">Session ends in 30 seconds — pick a drink or step away.</div>

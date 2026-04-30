@@ -316,9 +316,19 @@ th { color: var(--accent); font-weight: 600; }
 .gift-banner-line + .gift-banner-line { margin-top: 0.5rem; }
 .gift-banner em { font-style: normal; color: var(--accent); }
 
-/* Gift-a-drink button on the main menu. */
-.gift-btn {
+/* Secondary actions on the menu — gift and top-up. Outlined buttons, sit
+   side-by-side on wide screens, stack on narrow. */
+.session-actions {
     margin-top: 1.5rem;
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.gift-btn,
+.topup-btn,
+.topup-btn:link,
+.topup-btn:visited {
     background: transparent;
     color: var(--accent);
     border: 2px solid var(--accent);
@@ -327,8 +337,11 @@ th { color: var(--accent); font-weight: 600; }
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
 }
-.gift-btn:hover { background: rgba(192, 133, 82, 0.12); }
+.gift-btn:hover,
+.topup-btn:hover { background: rgba(192, 133, 82, 0.12); color: var(--accent); }
 
 /* Recipient picker grid in the gift flow. */
 .gift-flow { text-align: center; }
