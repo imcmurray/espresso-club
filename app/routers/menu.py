@@ -24,7 +24,7 @@ async def menu(request: Request):
             "session": session,
             "drinks": state.list_active_drinks(),
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
-            "message": state.last_message,
+            "message": state.message_or_none(),
         },
     )
 
@@ -89,7 +89,7 @@ def _render_state(request: Request):
             "session": session,
             "drinks": state.list_active_drinks(),
             "balance_usd": sats_to_usd(session.balance_sats) if session else None,
-            "message": state.last_message,
+            "message": state.message_or_none(),
             "other_users": other_users,
         },
     )

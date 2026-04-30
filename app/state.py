@@ -60,9 +60,11 @@ class AppState:
 
     current: CurrentSession | None = None
     last_message: str | None = None
+    last_message_expires_at: float = 0.0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     SESSION_TIMEOUT_SECONDS = 30
+    MESSAGE_TIMEOUT_SECONDS = 30
 
     async def set_session(self, user_id: int, user_name: str,
                            balance_sats: int,
@@ -94,10 +96,24 @@ class AppState:
         async with self._lock:
             self.current = None
             self.last_message = message
+            # Auto-expire the message after 30s so user balances and "Enjoy
+            # your X!" lines don't linger on the screen after the customer
+            # has walked away.
+            self.last_message_expires_at = (
+                time.time() + self.MESSAGE_TIMEOUT_SECONDS if message else 0.0
+            )
 
     def session_or_none(self) -> CurrentSession | None:
         if self.current and self.current.is_active():
             return self.current
+        return None
+
+    def message_or_none(self) -> str | None:
+        """Return the post-session message if it was set within the last
+        MESSAGE_TIMEOUT_SECONDS, else None. Polled by the touchscreen
+        fragment, so once it ages out it just disappears on the next poll."""
+        if self.last_message and time.time() < self.last_message_expires_at:
+            return self.last_message
         return None
 
     # -- drinks live in the DB now; YAML is just a seed source ---------------
