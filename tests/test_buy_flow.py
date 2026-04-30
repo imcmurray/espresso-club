@@ -57,8 +57,10 @@ def app(monkeypatch, tmp_path, fake_ln):
 def test_full_flow(app):
     client, fake_ln = app
 
-    # 1. Onboard Sarah.
-    r = client.post("/onboard", data={"name": "Sarah"}, follow_redirects=False)
+    # 1. Onboard Sarah with her card UID supplied at signup.
+    r = client.post("/onboard",
+                     data={"name": "Sarah", "nfc_uid": "CARD-SARAH"},
+                     follow_redirects=False)
     assert r.status_code == 303
     assert "/topup/" in r.headers["location"]
     sarah_id = int(r.headers["location"].rsplit("/", 1)[1])
@@ -68,12 +70,8 @@ def test_full_flow(app):
                     if w.name and "Sarah" in w.name][0]
     fake_ln.fund_wallet(sarah_wallet.invoice_key, 5000)  # 5000 sats = $2.50
 
-    # 3. Tap registers the NFC card to Sarah.
-    r = client.post("/api/nfc/tap", json={"uid": "CARD-SARAH"})
-    assert r.status_code == 200
-    assert r.json()["status"] in ("registered", "ok")
-
-    # 4. Tap again to start a buy session.
+    # 3. Tap starts a buy session (card was registered at onboard, so this
+    #    is a normal "look up by UID" tap).
     r = client.post("/api/nfc/tap", json={"uid": "CARD-SARAH"})
     assert r.status_code == 200, r.text
     assert r.json()["balance_sats"] == 5000
@@ -98,14 +96,15 @@ def test_insufficient_balance(app):
     test_empty_wallet_redirects_to_topup below.
     """
     client, fake_ln = app
-    r = client.post("/onboard", data={"name": "ShortOnFunds"}, follow_redirects=False)
+    r = client.post("/onboard",
+                     data={"name": "ShortOnFunds", "nfc_uid": "CARD-SHORT"},
+                     follow_redirects=False)
 
     # Fund just enough to get a session but not enough for a latte ($1.10).
     wallet = next(w for w in fake_ln.wallets.values()
                    if "ShortOnFunds" in (w.name or ""))
     fake_ln.fund_wallet(wallet.invoice_key, 600)  # $0.30 < $1.10
 
-    client.post("/api/nfc/tap", json={"uid": "CARD-SHORT"})  # registration
     client.post("/api/nfc/tap", json={"uid": "CARD-SHORT"})  # session
 
     r = client.post("/api/buy/latte")
@@ -117,8 +116,9 @@ def test_empty_wallet_redirects_to_topup(app):
     instead of starting a normal session. The /menu screen will show a
     'Top up now' CTA."""
     client, _ = app
-    client.post("/onboard", data={"name": "Penniless"}, follow_redirects=False)
-    client.post("/api/nfc/tap", json={"uid": "CARD-NIL"})  # registration
+    client.post("/onboard",
+                 data={"name": "Penniless", "nfc_uid": "CARD-NIL"},
+                 follow_redirects=False)
 
     r = client.post("/api/nfc/tap", json={"uid": "CARD-NIL"})  # would-be session
     assert r.status_code == 200

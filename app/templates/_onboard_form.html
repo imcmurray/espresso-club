@@ -1,0 +1,15 @@
+<div class="onboard-form-card">
+    <p class="card-detected">
+        <span class="card-icon-small">✓</span>
+        Card detected: <code>{{ prefilled_card_uid }}</code>
+    </p>
+    <form method="post" action="/onboard">
+        <input type="hidden" name="nfc_uid" value="{{ prefilled_card_uid }}">
+        <label>
+            Your name
+            <input type="text" name="name" required autofocus
+                   placeholder="Sarah Connor">
+        </label>
+        <button type="submit">Create my account →</button>
+    </form>
+</div>

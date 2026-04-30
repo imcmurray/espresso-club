@@ -1,0 +1,14 @@
+<div class="onboard-waiting"
+     hx-get="/onboard/poll"
+     hx-trigger="every 2s"
+     hx-target="#onboard-state"
+     hx-swap="innerHTML">
+    <div class="card-icon">📇</div>
+    <h3>Tap a new NFC card on the reader to continue</h3>
+    <p class="hint">
+        Hold any unregistered card on the office NFC pad. As soon as we
+        detect it, this page will unlock and let you finish creating your
+        account.
+    </p>
+    <p class="fine-print pulse">Watching for taps…</p>
+</div>

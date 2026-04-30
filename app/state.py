@@ -66,10 +66,17 @@ class AppState:
     # over topup if both happen to be set).
     last_message_join_card_uid: str | None = None
     last_message_topup_user_id: int | None = None
+    # Most-recently tapped UID that didn't match any registered user.
+    # Cleared on a successful onboard or after UNKNOWN_TAP_WINDOW_SECONDS,
+    # whichever comes first. The /onboard page polls this to know when to
+    # unlock its form.
+    last_unknown_tap_uid: str | None = None
+    last_unknown_tap_at: float = 0.0
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     SESSION_TIMEOUT_SECONDS = 30
     MESSAGE_TIMEOUT_SECONDS = 30
+    UNKNOWN_TAP_WINDOW_SECONDS = 60
 
     async def set_session(self, user_id: int, user_name: str,
                            balance_sats: int,
@@ -141,6 +148,31 @@ class AppState:
                 and time.time() < self.last_message_expires_at):
             return self.last_message_topup_user_id
         return None
+
+    async def record_unknown_tap(self, uid: str) -> None:
+        """Stash an unknown-card UID so the /onboard page can unlock its
+        form once the user gets there. Window matches the time it'd
+        plausibly take a person to walk to the kiosk and visit /onboard."""
+        async with self._lock:
+            self.last_unknown_tap_uid = uid
+            self.last_unknown_tap_at = (
+                time.time() + self.UNKNOWN_TAP_WINDOW_SECONDS
+            )
+
+    def recent_unknown_tap(self) -> str | None:
+        """Return the most-recently-stashed unknown UID if it's still in
+        the watch window, else None."""
+        if (self.last_unknown_tap_uid
+                and time.time() < self.last_unknown_tap_at):
+            return self.last_unknown_tap_uid
+        return None
+
+    async def consume_unknown_tap(self) -> None:
+        """Clear the stashed UID after a successful onboard so it doesn't
+        keep nudging the form."""
+        async with self._lock:
+            self.last_unknown_tap_uid = None
+            self.last_unknown_tap_at = 0.0
 
     # -- drinks live in the DB now; YAML is just a seed source ---------------
 

@@ -46,6 +46,7 @@ async def nfc_tap(event: TapEvent, request: Request):
     # Normal tap: look up the user and start a session.
     user = state.db.get_user_by_nfc(event.uid)
     if not user:
+        await state.record_unknown_tap(event.uid)
         await state.clear_session(
             message="👋 New card! Tap below to join the club.",
             join_card_uid=event.uid,

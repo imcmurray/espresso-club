@@ -159,6 +159,45 @@ main a:visited, .session-card a:visited, .idle a:visited, .invoice-card a:visite
     margin: 0 auto;
 }
 
+/* "Tap a new card to continue" gate on /onboard. */
+.onboard-waiting { text-align: center; padding: 1.5rem 0.5rem; }
+.onboard-waiting .card-icon {
+    font-size: 5rem;
+    margin-bottom: 0.5rem;
+    animation: card-bounce 1.5s ease-in-out infinite;
+}
+@keyframes card-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
+}
+.onboard-waiting h3 { margin: 0.5rem 0; }
+.onboard-waiting .hint { color: var(--muted); max-width: 400px; margin: 0.5rem auto; }
+.onboard-waiting .pulse {
+    animation: pulse-fade 2s ease-in-out infinite;
+}
+@keyframes pulse-fade {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+}
+
+.onboard-form-card .card-detected {
+    background: rgba(109, 182, 116, 0.18);
+    border: 1px solid rgba(109, 182, 116, 0.5);
+    padding: 0.6rem 0.8rem;
+    border-radius: 0.4rem;
+    margin: 0 0 1rem 0;
+}
+.onboard-form-card .card-icon-small {
+    display: inline-block;
+    width: 1.4rem; height: 1.4rem; line-height: 1.4rem;
+    background: var(--good);
+    color: var(--bg);
+    border-radius: 50%;
+    text-align: center;
+    font-weight: 700;
+    margin-right: 0.4rem;
+}
+
 .admin { max-width: 1100px; }
 
 label { display: block; margin: 1rem 0; }

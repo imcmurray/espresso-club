@@ -97,14 +97,18 @@ def app(monkeypatch, tmp_path, fake_ln):
 
 
 def _onboard_and_fund(client, fake_ln, name, card_uid, sats):
-    r = client.post("/onboard", data={"name": name}, follow_redirects=False)
-    assert r.status_code == 303
+    """Helper: onboard a user with their card UID supplied at signup, then
+    fund their LNbits sub-wallet directly (simulating a paid Lightning
+    invoice). No separate tap-to-register step needed since card is set
+    on the form."""
+    r = client.post("/onboard",
+                     data={"name": name, "nfc_uid": card_uid},
+                     follow_redirects=False)
+    assert r.status_code == 303, r.text
     user_id = int(r.headers["location"].rsplit("/", 1)[1])
     wallet = next(w for w in fake_ln.wallets.values()
                    if w.name and name in w.name)
     fake_ln.fund_wallet(wallet.invoice_key, sats)
-    r = client.post("/api/nfc/tap", json={"uid": card_uid})
-    assert r.status_code == 200
     return user_id, wallet
 
 
