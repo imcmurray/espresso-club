@@ -57,6 +57,12 @@ class AppState:
     ln: LNbitsClient
     relay: Relay
     phoenixd: PhoenixdClient | None = None
+    # If set, the /admin* HTTP middleware requires Basic auth with these
+    # credentials. Auto-discovered from /lnbits-data/admin.json on startup
+    # (lnbits-init writes that file). When None, /admin is open — fine for
+    # tests and dev, logged loudly at boot for prod.
+    admin_auth_username: str | None = None
+    admin_auth_password: str | None = None
 
     current: CurrentSession | None = None
     last_message: str | None = None

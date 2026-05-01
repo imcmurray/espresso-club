@@ -10,6 +10,8 @@ import logging
 import time
 
 from fastapi import APIRouter, HTTPException, Request
+
+# `time` is used by the leaderboard endpoint below.
 from pydantic import BaseModel
 
 from config import sats_to_usd, usd_to_sats
@@ -27,23 +29,7 @@ class TapEvent(BaseModel):
 async def nfc_tap(event: TapEvent, request: Request):
     state = request.app.state.app_state
 
-    # Onboarding capture: if the most recent /onboard submission is awaiting a
-    # tap, claim this UID for that user.
-    pending_user_id = getattr(request.app.state, "pending_nfc_user_id", None)
-    pending_expires = getattr(request.app.state, "pending_nfc_expires", 0)
-    if pending_user_id and time.time() < pending_expires:
-        existing = state.db.get_user_by_nfc(event.uid)
-        if existing and existing.id != pending_user_id:
-            return {"status": "error", "message": f"that card is already assigned to {existing.name}"}
-        state.db.assign_nfc(pending_user_id, event.uid)
-        request.app.state.pending_nfc_user_id = None
-        user = state.db.get_user(pending_user_id)
-        log.info("NFC %s registered to user %s (%d)", event.uid, user.name, user.id)
-        balance = await state.ln.wallet_balance_sats(invoice_key=user.lnbits_invoice_key)
-        await state.set_session(user.id, user.name, balance)
-        return {"status": "registered", "user": user.name}
-
-    # Normal tap: look up the user and start a session.
+    # Look up the user by their card and start a session.
     user = state.db.get_user_by_nfc(event.uid)
     if not user:
         await state.record_unknown_tap(event.uid)
@@ -274,9 +260,8 @@ async def slack_user(slack_user_id: str, request: Request):
 
 @router.get("/leaderboard")
 async def leaderboard(request: Request):
-    import time as _t
     state = request.app.state.app_state
-    since = int(_t.time()) - 30 * 86400
+    since = int(time.time()) - 30 * 86400
     rows = state.db.leaderboard(since_ts=since)
     return [{"name": n, "drinks": d, "sats": s, "usd": sats_to_usd(s)}
             for (n, d, s) in rows]

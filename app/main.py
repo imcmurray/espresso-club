@@ -16,15 +16,17 @@ Machine-to-machine:
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import secrets
 import sqlite3
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 
 from config import get_drinks, get_settings
 from db import Database, Drink
@@ -173,8 +175,18 @@ async def lifespan(app: FastAPI):
                  settings.drinks_config)
 
     state = AppState(settings=settings, drinks=drinks_cfg, db=db, ln=ln,
-                      relay=relay, phoenixd=phoenixd)
+                      relay=relay, phoenixd=phoenixd,
+                      admin_auth_username=admin_username,
+                      admin_auth_password=admin_password)
     app.state.app_state = state
+
+    if admin_username and admin_password:
+        log.info("/admin protected by Basic auth (username=%s)", admin_username)
+    else:
+        log.warning("/admin is UNAUTHENTICATED — no admin.json found at "
+                    "/lnbits-data/admin.json. Anyone on the network can "
+                    "edit drinks, see users, reassign cards. Fine for tests, "
+                    "not fine for prod.")
 
     log.info("Espresso app starting — relay=%s lnbits=%s",
              settings.relay_driver, settings.lnbits_url)
@@ -193,6 +205,40 @@ app.include_router(onboard.router)
 app.include_router(topup.router)
 app.include_router(admin.router)
 app.include_router(api.router)
+
+
+@app.middleware("http")
+async def admin_basic_auth(request: Request, call_next):
+    """Gate /admin* with HTTP Basic Auth using the LNbits-init-generated
+    credentials in /lnbits-data/admin.json. If those creds aren't loaded
+    (test env, dev with no LNbits), /admin is open — a warning gets
+    logged at startup so it's not silent."""
+    path = request.url.path
+    if not (path == "/admin" or path.startswith("/admin/")):
+        return await call_next(request)
+
+    state = getattr(request.app.state, "app_state", None)
+    if state is None:
+        return await call_next(request)
+    expected_user = state.admin_auth_username
+    expected_pass = state.admin_auth_password
+    if not (expected_user and expected_pass):
+        return await call_next(request)
+
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:].encode()).decode()
+            user, _, password = decoded.partition(":")
+            if (secrets.compare_digest(user, expected_user)
+                    and secrets.compare_digest(password, expected_pass)):
+                return await call_next(request)
+        except (ValueError, UnicodeDecodeError):
+            pass
+    return Response(
+        "Authentication required.\n", status_code=401,
+        headers={"WWW-Authenticate": 'Basic realm="Espresso Club Admin"'},
+    )
 
 
 @app.get("/")
