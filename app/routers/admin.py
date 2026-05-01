@@ -182,6 +182,14 @@ async def admin_assign_nfc(
         )
 
     state.db.assign_nfc(user_id, nfc_uid)
+
+    # Mirror the change into LNbits's external_id so the LNbits user list
+    # stays a useful cross-reference. Best-effort.
+    if user.lnbits_user_id:
+        await state.ln.update_user_metadata(
+            user.lnbits_user_id, external_id=nfc_uid,
+        )
+
     return RedirectResponse(url="/admin", status_code=303)
 
 

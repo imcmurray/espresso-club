@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     nfc_uid TEXT UNIQUE,
     lnbits_wallet_id TEXT NOT NULL,
+    lnbits_user_id TEXT,
     lnbits_admin_key TEXT NOT NULL,
     lnbits_invoice_key TEXT NOT NULL,
     slack_user_id TEXT,
@@ -82,6 +83,7 @@ class User:
     name: str
     nfc_uid: str | None
     lnbits_wallet_id: str
+    lnbits_user_id: str | None
     lnbits_admin_key: str
     lnbits_invoice_key: str
     slack_user_id: str | None
@@ -89,7 +91,21 @@ class User:
 
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
-        return cls(**{k: row[k] for k in row.keys()})
+        # Defensive: handle older rows missing the lnbits_user_id column,
+        # which we added after some users had already been created. SQLite
+        # will return None for missing columns when the schema is migrated
+        # via ADD COLUMN; for very old DBs that still need the migration
+        # to run, the row.keys() check below also guards.
+        cols = set(row.keys())
+        return cls(
+            id=row["id"], name=row["name"], nfc_uid=row["nfc_uid"],
+            lnbits_wallet_id=row["lnbits_wallet_id"],
+            lnbits_user_id=row["lnbits_user_id"] if "lnbits_user_id" in cols else None,
+            lnbits_admin_key=row["lnbits_admin_key"],
+            lnbits_invoice_key=row["lnbits_invoice_key"],
+            slack_user_id=row["slack_user_id"],
+            created_at=row["created_at"],
+        )
 
 
 @dataclass
@@ -153,6 +169,15 @@ class Database:
     def _init_schema(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            # Idempotent column adds for existing DBs that predate a column.
+            # SQLite has no IF NOT EXISTS for ADD COLUMN, so try/except.
+            for sql in [
+                "ALTER TABLE users ADD COLUMN lnbits_user_id TEXT",
+            ]:
+                try:
+                    conn.execute(sql)
+                except sqlite3.OperationalError:
+                    pass
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -174,18 +199,19 @@ class Database:
         lnbits_wallet_id: str,
         lnbits_admin_key: str,
         lnbits_invoice_key: str,
+        lnbits_user_id: str | None = None,
         nfc_uid: str | None = None,
         slack_user_id: str | None = None,
     ) -> User:
         with self.connect() as conn:
             cur = conn.execute(
                 """
-                INSERT INTO users (name, nfc_uid, lnbits_wallet_id,
+                INSERT INTO users (name, nfc_uid, lnbits_wallet_id, lnbits_user_id,
                     lnbits_admin_key, lnbits_invoice_key, slack_user_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (name, nfc_uid, lnbits_wallet_id, lnbits_admin_key,
-                 lnbits_invoice_key, slack_user_id, int(time.time())),
+                (name, nfc_uid, lnbits_wallet_id, lnbits_user_id,
+                 lnbits_admin_key, lnbits_invoice_key, slack_user_id, int(time.time())),
             )
             user_id = cur.lastrowid
             row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()

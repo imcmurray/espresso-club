@@ -47,7 +47,7 @@ class FakeLNbits:
         # Mirrors POST /api/v1/account in LNbits v1.5+: anonymous, no auth,
         # returns a single wallet keyed for the implicit new user. The
         # production code also calls a best-effort admin endpoint to set
-        # the LNbits username, but tests don't exercise that.
+        # the LNbits username + external_id, but tests don't exercise that.
         wid = f"w{self._next_id}"
         self._next_id += 1
         w = FakeWallet(
@@ -60,12 +60,14 @@ class FakeLNbits:
         return type("WalletInfo", (), dict(
             id=w.id, name=w.name, balance_sats=0,
             admin_key=w.admin_key, invoice_key=w.invoice_key,
+            user_id=f"u{wid}",
         ))
 
-    async def _try_set_username(self, user_id, display_name):
+    async def update_user_metadata(self, user_id, *,
+                                    display_name=None, external_id=None):
         """No-op stub matching the production client's interface so call
-        sites can hit it unconditionally."""
-        pass
+        sites can hit it unconditionally in tests."""
+        return True
 
     def _wallet_by_invoice(self, invoice_key) -> FakeWallet:
         for w in self.wallets.values():

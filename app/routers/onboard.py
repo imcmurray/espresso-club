@@ -116,10 +116,21 @@ async def onboard_submit(request: Request,
     user = state.db.create_user(
         name=name,
         lnbits_wallet_id=wallet.id,
+        lnbits_user_id=wallet.user_id or None,
         lnbits_admin_key=wallet.admin_key,
         lnbits_invoice_key=wallet.invoice_key,
         nfc_uid=nfc_uid,
     )
+
+    # Set both LNbits username (for the user list) and external_id (for
+    # cross-referencing the physical NFC card). Best-effort: failure is
+    # logged but doesn't roll back account creation.
+    if wallet.user_id:
+        await state.ln.update_user_metadata(
+            wallet.user_id,
+            display_name=name,
+            external_id=nfc_uid,
+        )
 
     # The card is consumed by this onboard — clear the unknown-tap state so
     # the next visitor to /onboard doesn't see this user's UID.

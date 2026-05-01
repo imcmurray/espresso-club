@@ -35,6 +35,7 @@ class WalletInfo:
     balance_sats: int
     admin_key: str
     invoice_key: str
+    user_id: str = ""   # LNbits-side account ID, distinct from wallet id
 
 
 @dataclass
@@ -118,35 +119,67 @@ class LNbitsClient:
         """
         body = {"name": wallet_name or f"{user_name}'s tab"}
         data = await self._request("POST", "/api/v1/account", json=body)
+        user_id = data.get("user", "")
         wallet = WalletInfo(
             id=data["id"],
             name=data["name"],
             balance_sats=int(data.get("balance_msat", 0)) // 1000,
             admin_key=data["adminkey"],
             invoice_key=data["inkey"],
+            user_id=user_id,
         )
-        user_id = data.get("user")
-        if user_id:
-            await self._try_set_username(user_id, user_name)
         return wallet
 
-    async def _try_set_username(self, user_id: str, display_name: str) -> None:
-        """Best-effort: PUT /users/api/v1/user/{id} with a slugified
-        username so the LNbits user list shows a recognizable label.
+    async def _admin_get_user(self, user_id: str) -> dict | None:
+        """Fetch an LNbits account by ID via the admin API. Used to
+        preserve fields when doing a partial PUT update."""
+        token = await self._get_admin_jwt()
+        if not token:
+            return None
+        try:
+            r = await self._client.get(
+                f"{self.base_url}/users/api/v1/user/{user_id}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            if r.status_code == 200:
+                return r.json()
+        except httpx.HTTPError as e:
+            log.warning("admin_get_user error: %s", e)
+        return None
 
-        LNbits requires `[a-zA-Z0-9._]{2,20}`, no leading/trailing dot or
-        underscore, and no consecutive specials. We slugify the staff
-        name and append 4 hex chars of randomness for uniqueness.
+    async def update_user_metadata(self, user_id: str, *,
+                                    display_name: str | None = None,
+                                    external_id: str | None = None) -> bool:
+        """Best-effort: PUT /users/api/v1/user/{id} to set the username
+        (slugified from display_name) and/or external_id (typically the
+        NFC card UID). Fields left as None are preserved by fetching the
+        current account first.
+
+        LNbits's PUT validates that body.id == url.user_id and overwrites
+        ALL fields with what's in the body — so we always send the full
+        set, filling unspecified fields with the current values.
         """
         token = await self._get_admin_jwt()
         if not token:
-            log.info("no admin JWT available — leaving LNbits username unset")
-            return
-        username = _slugify_for_lnbits(display_name)
-        # LNbits's PUT /users/api/v1/user/{user_id} validates that the body's
-        # `id` field matches the URL's user_id; without it, you get
-        # 400 "User Id missmatch" and the username is silently never set.
-        body = {"id": user_id, "username": username}
+            log.info("no admin JWT — skipping LNbits metadata update")
+            return False
+
+        username = (
+            _slugify_for_lnbits(display_name) if display_name is not None
+            else None
+        )
+
+        # If we're only updating one field, fetch the existing account so
+        # we don't blank out the others.
+        if username is None or external_id is None:
+            current = await self._admin_get_user(user_id) or {}
+            if username is None:
+                username = current.get("username")
+            if external_id is None:
+                external_id = current.get("external_id")
+
+        body = {"id": user_id, "username": username,
+                "external_id": external_id}
         try:
             r = await self._client.put(
                 f"{self.base_url}/users/api/v1/user/{user_id}",
@@ -164,12 +197,15 @@ class LNbitsClient:
                         headers={"Authorization": f"Bearer {token}"},
                     )
             if r.status_code >= 400:
-                log.warning("set username '%s' on %s: %d %s",
-                             username, user_id, r.status_code, r.text[:120])
-            else:
-                log.info("LNbits username set: %s -> %s", user_id, username)
+                log.warning("update LNbits user %s: %d %s",
+                             user_id, r.status_code, r.text[:120])
+                return False
+            log.info("LNbits user %s updated: username=%s external_id=%s",
+                      user_id, username, external_id)
+            return True
         except httpx.HTTPError as e:
-            log.warning("set_username request error: %s", e)
+            log.warning("update_user_metadata request error: %s", e)
+            return False
 
     # -- wallet balance / invoices / payments --------------------------------
 
