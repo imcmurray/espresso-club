@@ -143,10 +143,14 @@ class LNbitsClient:
             log.info("no admin JWT available — leaving LNbits username unset")
             return
         username = _slugify_for_lnbits(display_name)
+        # LNbits's PUT /users/api/v1/user/{user_id} validates that the body's
+        # `id` field matches the URL's user_id; without it, you get
+        # 400 "User Id missmatch" and the username is silently never set.
+        body = {"id": user_id, "username": username}
         try:
             r = await self._client.put(
                 f"{self.base_url}/users/api/v1/user/{user_id}",
-                json={"username": username},
+                json=body,
                 headers={"Authorization": f"Bearer {token}"},
             )
             if r.status_code == 401:
@@ -156,7 +160,7 @@ class LNbitsClient:
                 if token:
                     r = await self._client.put(
                         f"{self.base_url}/users/api/v1/user/{user_id}",
-                        json={"username": username},
+                        json=body,
                         headers={"Authorization": f"Bearer {token}"},
                     )
             if r.status_code >= 400:
